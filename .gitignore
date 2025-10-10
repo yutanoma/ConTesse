@@ -5,6 +5,7 @@
 /CMakeSettings.json
 /results
 /.vscode
+.cache/*
 
 # Dependencies pulled down with FetchContents
 /_external

@@ -25,7 +25,7 @@ dependencies:
   - libedit=3.1.20191231=h0678c8f_2
   - libev=4.33=haf1e3a3_1
   - libffi=3.3=h046ec9c_2
-  - libgfortran=3.0.1=h93005f0_2
+  # - libgfortran=3.0.1=h93005f0_2
   - liblapack=3.9.0=10_openblas
   - libnghttp2=1.43.0=h07e645a_0
   - libopenblas=0.3.17=h9a5756b_1
