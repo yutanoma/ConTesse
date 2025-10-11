@@ -2,6 +2,12 @@ if(TARGET glfw::glfw)
     return()
 endif()
 
+# Check if glfw is already available from libigl
+if(TARGET glfw)
+    add_library(glfw::glfw ALIAS glfw)
+    return()
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
     glfw

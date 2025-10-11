@@ -1,0 +1,85 @@
+#pragma once
+
+#include <CGAL/Arrangement_2.h>
+#include <CGAL/Arr_segment_traits_2.h>
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/Arrangement_with_history_2.h>
+#include <Eigen/Core>
+#include <vector>
+#include <map>
+#include <unordered_map>
+
+typedef CGAL::Exact_predicates_exact_constructions_kernel Kernel;
+typedef CGAL::Arr_segment_traits_2<Kernel> Traits_2;
+typedef Traits_2::Point_2 Point_2;
+typedef Traits_2::X_monotone_curve_2 Segment_2;
+typedef CGAL::Arrangement_2<Traits_2> Arrangement_2;
+typedef CGAL::Arrangement_with_history_2<Traits_2> Arrangement_with_history_2;
+
+// Custom hash and equality for CGAL keys
+struct Point2Hash {
+    size_t operator()(const Point_2& p) const noexcept {
+        size_t h1 = std::hash<double>()(CGAL::to_double(p.x()));
+        size_t h2 = std::hash<double>()(CGAL::to_double(p.y()));
+        return h1 ^ (h2 << 1);
+    }
+};
+struct Point2Equal {
+    bool operator()(const Point_2& a, const Point_2& b) const noexcept {
+        return a == b;
+    }
+};
+struct Segment2Hash {
+    size_t operator()(const Segment_2& s) const noexcept {
+        size_t h1 = Point2Hash{}(s.source());
+        size_t h2 = Point2Hash{}(s.target());
+        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1 << 6) + (h1 >> 2));
+    }
+};
+struct Segment2Equal {
+    bool operator()(const Segment_2& a, const Segment_2& b) const noexcept {
+        return a.source() == b.source() && a.target() == b.target();
+    }
+};
+
+template <typename T>
+using Point2List = std::unordered_map<Point_2, T, Point2Hash, Point2Equal>;
+
+template <typename T>
+using Segment2List = std::unordered_map<Segment_2, T, Segment2Hash, Segment2Equal>;
+
+namespace utils {
+
+// Custom comparator for Segment_2 objects
+struct Segment2Comparator {
+    bool operator()(const Segment_2& a, const Segment_2& b) const {
+        auto a_pair = std::make_pair(a.source(), a.target());
+        auto b_pair = std::make_pair(b.source(), b.target());
+        return a_pair < b_pair;
+    }
+};
+
+struct Intersection {
+    Segment_2 segment1, segment2;
+    Point_2 p1_1, p1_2;
+    Point_2 p2_1, p2_2;
+    double t1, t2;
+    Point_2 intersection_point;
+    Eigen::Vector2d point;
+};
+
+std::vector<Intersection> planar_map_intersections(
+    const Arrangement_with_history_2 &arr_with_history
+);
+
+std::tuple<
+    Arrangement_with_history_2,
+    std::map<Point_2, std::pair<int, int>>,
+    std::map<Segment_2, std::pair<int, int>, Segment2Comparator>
+> planar_map(
+    const std::vector<
+        std::pair<Eigen::MatrixXd, Eigen::MatrixXi>
+    > &contours_2d
+);
+
+}

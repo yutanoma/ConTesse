@@ -2,6 +2,12 @@ if(TARGET glad::glad)
     return()
 endif()
 
+# Check if glad is already available from libigl
+if(TARGET glad)
+    add_library(glad::glad ALIAS glad)
+    return()
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   glad

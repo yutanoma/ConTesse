@@ -226,6 +226,7 @@ target_link_libraries(Base${PROJECT_NAME} PUBLIC
     shor_van_wyck::shor_van_wyck
     nlohmannjson::nlohmannjson
     subdeval::subdeval
+    igl::igl
 )
 target_compile_definitions(Base${PROJECT_NAME} PUBLIC 
   "CONTOURS_TESSELATION_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\""
