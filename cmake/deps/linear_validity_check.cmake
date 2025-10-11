@@ -5,10 +5,14 @@ set(LINEAR_VALIDITY_CHECK_SOURCE_DIR "${PROJECT_SOURCE_DIR}/external/linear_vali
 find_package(CGAL REQUIRED COMPONENTS Core)
 
 add_library(linear_validity_check STATIC)
+
+# Automatically include all cpp files in the directory
+file(GLOB LINEAR_VALIDITY_CHECK_SOURCES
+  "${LINEAR_VALIDITY_CHECK_SOURCE_DIR}/*.cpp"
+)
+
 target_sources(linear_validity_check PRIVATE
-  ${LINEAR_VALIDITY_CHECK_SOURCE_DIR}/planar_map.cpp
-  ${LINEAR_VALIDITY_CHECK_SOURCE_DIR}/validity_check_qi.cpp
-  ${LINEAR_VALIDITY_CHECK_SOURCE_DIR}/validity_check.cpp
+  ${LINEAR_VALIDITY_CHECK_SOURCES}
 )
 target_link_libraries(linear_validity_check PUBLIC
   CGAL::CGAL
