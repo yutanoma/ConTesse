@@ -7,6 +7,7 @@
 #include <igl/predicates/ear_clipping.h>
 #include <igl/predicates/predicates.h>
 #include <igl/triangle/triangulate.h>
+#include <igl/triangle_triangle_adjacency.h>
 
 #include "plot.h"
 #include "GLFW/glfw3.h"

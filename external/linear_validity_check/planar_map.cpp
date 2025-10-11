@@ -1,5 +1,4 @@
 #include "planar_map.h"
-#include "segment_contours.h"
 #include <map>
 #include <iostream>
 #include <cmath>

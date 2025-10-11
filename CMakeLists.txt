@@ -71,6 +71,7 @@ include(deps/libigl)
 include(deps/nanogui)
 include(deps/opensubdiv)
 include(deps/shor_van_wyck)
+include(deps/linear_validity_check)
 
 ## ============[ Compile with compiler warnings / only for us ] =============
 

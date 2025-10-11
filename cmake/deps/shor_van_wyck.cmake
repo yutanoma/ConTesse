@@ -9,6 +9,7 @@ target_sources(shor_van_wyck PRIVATE
 )
 target_link_libraries(shor_van_wyck PUBLIC
   igl::igl
+  glfw
 )
 target_include_directories(shor_van_wyck PUBLIC
   ${SHOR_SOURCE_DIR}
