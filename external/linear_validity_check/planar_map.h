@@ -15,6 +15,7 @@ typedef Traits_2::Point_2 Point_2;
 typedef Traits_2::X_monotone_curve_2 Segment_2;
 typedef CGAL::Arrangement_2<Traits_2> Arrangement_2;
 typedef CGAL::Arrangement_with_history_2<Traits_2> Arrangement_with_history_2;
+typedef CGAL::Arrangement_with_history_2<Traits_2>::Face_const_handle Face_const_handle;
 
 // Custom hash and equality for CGAL keys
 struct Point2Hash {

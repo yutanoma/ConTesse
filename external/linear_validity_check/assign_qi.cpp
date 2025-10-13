@@ -1,5 +1,8 @@
 #include "assign_qi.h"
 
+#include "validity_check.h"
+#include "planar_map.h"
+
 #include <Eigen/Geometry>
 
 namespace utils {
@@ -298,6 +301,7 @@ void propagate_qi(
     const Arrangement_with_history_2 &arr,
     const std::map<Point_2, bool> &point_is_singularity,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
+    const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
     const std::map<Point_2, Segment_2> &upper_casing_edges,
     const std::map<Point_2, Segment_2> &lower_casing_edges,
     const std::map<Point_2, Point_2> &next,
@@ -417,78 +421,10 @@ void propagate_qi(
                     }
                 }
 
-                // {
-                //     Point_2 dbg(-0.0813, 0.3326);
-                //     if (CGAL::squared_distance(dbg, current_vertex->point()) < 1e-6) {
-                //         std::cout << "current_vertex->point(): " << current_vertex->point() << std::endl;
-                //         std::cout << "current_segment: " << current_segment << std::endl;
-                //         std::cout << "current_qi: " << current_qi << std::endl;
-
-                //         std::cout << "qi_crossing: " << qi_crossing.size() << std::endl;
-                //         for (auto [segment, qi_value] : qi_crossing) {
-                //             std::cout << "  segment: " << segment << ", qi_value: " << qi_value << std::endl;
-                //             std::cout << "      qi.at(segment): " << qi.at(segment) << std::endl;
-                //         }
-                //         std::cout << std::endl;
-                //     }
-                // }
-
                 break;
             }
         }
     }
-}
-
-std::tuple<bool, std::vector<Point_2>> check_qi_mismatch(
-    const Arrangement_with_history_2 &arr,
-    const std::map<Point_2, bool> &point_is_singularity,
-    const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
-    // given an intersection point, which edges are the upper and lower casing edges?
-    const std::map<Point_2, Segment_2> &upper_casing_edges,
-    const std::map<Point_2, Segment_2> &lower_casing_edges,
-    // given a point, which point is the next point in the circular order?
-    // *exclude* the self-intersection point in this list
-    const std::map<Point_2, Point_2> &next,
-    const std::map<Segment_2, int, Segment2Comparator> &qi
-) {
-    bool is_valid = true;
-    std::vector<Point_2> qi_mismatch_positions;
-    
-    // check all vertices in the arrangement
-    for (auto it = arr.vertices_begin(); it != arr.vertices_end(); it++) {
-        auto vertex = it;
-
-        auto [crossing_found, qi_crossing] = is_crossing(arr, qi, upper_casing_edges, lower_casing_edges, next, vertex);
-        if (crossing_found) {
-            if (qi_crossing.size() != 4) {
-                // the qi must be assigned to all 4 sides respecting the casing information
-                // qi_crossing.size() != 4 means that some sides are not assigned a qi that conforms to the casing information
-                is_valid = false;
-                qi_mismatch_positions.push_back(vertex->point());
-            } else {
-                for (auto [segment, qi_value] : qi_crossing) {
-                    if (qi.at(segment) != qi_value) {
-                        is_valid = false;
-                        qi_mismatch_positions.push_back(vertex->point());
-                        break;
-                    }
-                }
-            }
-        }
-        
-        auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, vertex);
-        if (singularity_found) {
-            for (auto [segment, qi_value] : qi_singularity) {
-                if (qi.at(segment) != qi_value) {
-                    is_valid = false;
-                    qi_mismatch_positions.push_back(vertex->point());
-                    break;
-                }
-            }
-        }
-    }
-
-    return {is_valid, qi_mismatch_positions};
 }
 
 // @return: whether the arrangement is valid, qi for each segment, and positions where qi mismatch occurs
@@ -497,6 +433,8 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     std::map<Point_2, bool> &point_is_singularity,
     // convex/concave labeling per segment. This is based on the "old" segments on the planar map
     std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
+    // the segment is a cut on the triangulation
+    std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
     // given an intersection point, which "old" edges are the upper and lower casing edges?
     std::map<Point_2, Segment_2> &upper_casing_edges,
     std::map<Point_2, Segment_2> &lower_casing_edges,
@@ -512,34 +450,22 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
         qi[segment] = -1;
     }
 
+    // 0. assign the winding number to each face
+    std::map<Face_const_handle, int> wn = face_wn(arr);
+
     // 1. propagate the qi from the silhouette
     assign_silhouette_qi(arr, qi);
-    propagate_qi(arr, point_is_singularity, segment_is_convex, upper_casing_edges, lower_casing_edges, next, qi);
+    propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
+                 upper_casing_edges, lower_casing_edges, next, qi);
 
-    // // next, for each independent hole, try to assign the qi
-    // // the qi must be equipped with the depth of the hole
-    // std::map<Segment_2, int, Segment2Comparator> depth;
-    // for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
-    //     Segment_2 segment = it->curve();
-    //     depth[segment] = 0;
-    //     // the qi is depth + qi
-    // }
-
-    // assign_hole_qi(arr, qi, depth);
-
-    // // propagate the qi from the holes
-    // propagate_qi(arr, qi);
-
-    // // determine the d for each hole
-    // determine_hole_d(arr, qi, depth);
+    // 2. propagate the qi from the "lowest winding number" edges
+    assign_lowest_wn_qi(arr, qi);
+    propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
+                 upper_casing_edges, lower_casing_edges, next, qi);
 
     // finally, check the validity for each vertex / singularity
-    auto [is_valid, qi_mismatch_positions] = check_qi_mismatch(arr, point_is_singularity, segment_is_convex, upper_casing_edges, lower_casing_edges, next, qi);
-
-    // // also check if the winding number constraints are met
-    // bool is_valid_winding_number = check_winding_number_constraints(arr, qi, depth);
-    // is_valid = is_valid && is_valid_winding_number;
+    auto [is_valid, qi_mismatch_positions] = check_qi_mismatch(arr, next, qi, is_segment_invalid);
 
     return {is_valid, qi, qi_mismatch_positions};
 }
-}
+} // namespace utils
