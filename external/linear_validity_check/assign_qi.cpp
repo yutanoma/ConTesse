@@ -52,6 +52,75 @@ void assign_silhouette_qi(
     }
 }
 
+void assign_lowest_wn_qi(
+    const Arrangement_with_history_2 &arr,
+    const std::map<Face_const_handle, int> &wn,
+    const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+    std::map<Segment_2, int, Segment2Comparator> &qi
+) {
+  std::map<Segment_2, bool, Segment2Comparator> visited;
+  std::queue<Segment_2> q;
+
+  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
+    if (qi.at(it->curve()) != -1) {
+      visited[it->curve()] = true;
+    } else {
+      visited[it->curve()] = false;
+      q.push(it->curve());
+    }
+  }
+
+  std::map<Point_2, std::vector<Segment_2>> point_to_segments;
+  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
+    point_to_segments[it->source()->point()].push_back(it->curve());
+    point_to_segments[it->target()->point()].push_back(it->curve());
+  }
+
+  auto [left_face, right_face] = segment_to_face(arr, segment_orientation);
+
+  while (!q.empty()) {
+    auto segment = q.front();
+    q.pop();
+
+    if (visited.at(segment)) {
+      continue;
+    }
+
+    int smallest_wn = wn.at(right_face.at(segment));
+    Segment_2 smallest_wn_segment = segment;
+
+    // iterate through all the connected segments
+    std::queue<Segment_2> q_connected;
+    q_connected.push(segment);
+
+    while (!q_connected.empty()) {
+      auto segment_connected = q_connected.front();
+      q_connected.pop();
+
+      visited[segment_connected] = true;
+
+      int right_wn = wn.at(right_face.at(segment_connected));
+      if (right_wn < smallest_wn) {
+        smallest_wn = right_wn;
+        smallest_wn_segment = segment_connected;
+      }
+
+      // add the incident segments
+      std::vector<Point_2> incident_points = {segment_connected.source(),
+                                              segment_connected.target()};
+      for (auto incident_point : incident_points) {
+        auto segments = point_to_segments.at(incident_point);
+
+        for (auto segment_connected : segments) {
+          if (!visited.at(segment_connected)) {
+            q_connected.push(segment_connected);
+          }
+        }
+      }
+    }
+  }
+}
+
 
 // tells if the given point is a crossing.
 // if it is, it also returns the qi for each side of the crossing
@@ -60,7 +129,8 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
     const std::map<Segment_2, int, Segment2Comparator> &qi,
     const std::map<Point_2, Segment_2> &upper_casing_edges,
     const std::map<Point_2, Segment_2> &lower_casing_edges,
-    const std::map<Point_2, Point_2> &next,
+    const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+    const std::map<Segment_2, bool, Segment2Comparator> &is_cut,
     Vertex_const_iterator &vertex
 ) {
     std::vector<std::pair<Segment_2, int>> returning_qi;
@@ -71,7 +141,6 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
     auto vertex_point = vertex->point();
 
     std::vector<Segment_2> upper_new_edges, lower_new_edges;
-    Segment_2 upper_old_edge, lower_old_edge;
 
     auto it = vertex->incident_halfedges();
     do {
@@ -89,10 +158,8 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
 
         if (is_identical_segment(segment, upper_casing_edges.at(vertex->point()))) {
             upper_new_edges.push_back(it->curve());
-            upper_old_edge = segment;
         } else if (is_identical_segment(segment, lower_casing_edges.at(vertex->point()))) {
             lower_new_edges.push_back(it->curve());
-            lower_old_edge = segment;
         }
 
         ++it;
@@ -105,75 +172,69 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
         throw std::runtime_error("Error: upper_new_edges.size(): " + std::to_string(upper_new_edges.size()) + " and lower_new_edges.size(): " + std::to_string(lower_new_edges.size()) + " edges");
     }
 
-    Point_2 upper_1_pt_new = upper_new_edges[0].source() == vertex_point ? upper_new_edges[0].target() : upper_new_edges[0].source();
-    Point_2 upper_2_pt_new = upper_new_edges[1].source() == vertex_point ? upper_new_edges[1].target() : upper_new_edges[1].source();
-    Point_2 lower_1_pt_new = lower_new_edges[0].source() == vertex_point ? lower_new_edges[0].target() : lower_new_edges[0].source();
-    Point_2 lower_2_pt_new = lower_new_edges[1].source() == vertex_point ? lower_new_edges[1].target() : lower_new_edges[1].source();
-
     Segment_2 upper_1_new = upper_new_edges[0];
     Segment_2 upper_2_new = upper_new_edges[1];
     Segment_2 lower_1_new = lower_new_edges[0];
     Segment_2 lower_2_new = lower_new_edges[1];
 
-    // these are the prev and next points of the old edges
-    Point_2 upper_old_prev, upper_old_next;
-    Point_2 lower_old_prev, lower_old_next;
+    bool is_upper_1_positive = segment_orientation.at(upper_1_new) == 1;
+    bool is_upper_2_positive = segment_orientation.at(upper_2_new) == 1;
+    bool is_lower_1_positive = segment_orientation.at(lower_1_new) == 1;
+    bool is_lower_2_positive = segment_orientation.at(lower_2_new) == 1;
 
-    if (next.at(upper_old_edge.source()) == upper_old_edge.target()) {
-        upper_old_prev = upper_old_edge.source();
-        upper_old_next = upper_old_edge.target();
-    } else if (next.at(upper_old_edge.target()) == upper_old_edge.source()) {
-        upper_old_prev = upper_old_edge.target();
-        upper_old_next = upper_old_edge.source();
-    } else {
-        std::cerr << "Error: upper_old_edge.source(): " << upper_old_edge.source() << " and upper_old_edge.target(): " << upper_old_edge.target() << std::endl;
-        throw std::runtime_error("Error: upper_old_edge.source() and upper_old_edge.target() are not the same");
+    bool upper_1_prev_crossing = is_upper_1_positive ? upper_1_new.source() == vertex_point : upper_1_new.target() == vertex_point;
+    bool upper_2_prev_crossing = is_upper_2_positive ? upper_2_new.source() == vertex_point : upper_2_new.target() == vertex_point;
+    bool lower_1_prev_crossing = is_lower_1_positive ? lower_1_new.source() == vertex_point : lower_1_new.target() == vertex_point;
+    bool lower_2_prev_crossing = is_lower_2_positive
+                                     ? lower_2_new.source() == vertex_point
+                                     : lower_2_new.target() == vertex_point;
+
+    if ((upper_1_prev_crossing && upper_2_prev_crossing) || (!upper_1_prev_crossing && !upper_2_prev_crossing)) {
+      std::cerr << "Error: upper_1_prev_crossing and upper_2_prev_crossing are "
+                   "both true or both false"
+                << std::endl;
+      std::cerr << "upper_1_prev_crossing: " << upper_1_prev_crossing << ", upper_2_prev_crossing: " << upper_2_prev_crossing << std::endl;
+      throw std::runtime_error("Error: upper_1_prev_crossing and upper_2_prev_crossing are both true");
     }
-    
-    if (next.at(lower_old_edge.source()) == lower_old_edge.target()) {
-        lower_old_prev = lower_old_edge.source();
-        lower_old_next = lower_old_edge.target();
-    } else if (next.at(lower_old_edge.target()) == lower_old_edge.source()) {
-        lower_old_prev = lower_old_edge.target();
-        lower_old_next = lower_old_edge.source();
-    } else {
-        std::cerr << "Error: lower_old_edge.source(): " << lower_old_edge.source() << " and lower_old_edge.target(): " << lower_old_edge.target() << std::endl;
-        throw std::runtime_error("Error: lower_old_edge.source() and lower_old_edge.target() are not the same");
+    if ((lower_1_prev_crossing && lower_2_prev_crossing) || (!lower_1_prev_crossing && !lower_2_prev_crossing)) {
+      std::cerr << "Error: lower_1_prev_crossing and lower_2_prev_crossing are "
+                   "both true or both false"
+                << std::endl;
+      std::cerr << "lower_1_prev_crossing: " << lower_1_prev_crossing << ", lower_2_prev_crossing: " << lower_2_prev_crossing << std::endl;
+      throw std::runtime_error("Error: lower_1_prev_crossing and lower_2_prev_crossing are both true");
     }
 
-    // the closer one to _old_prev is the _new_prev
-    Point_2 upper_new_prev, upper_new_next;
-    
-    if (
-        CGAL::squared_distance(upper_1_pt_new, upper_old_prev) <
-        CGAL::squared_distance(upper_2_pt_new, upper_old_prev)
-    ) {
-        upper_new_prev = upper_1_pt_new;
-        upper_new_next = upper_2_pt_new;
-    } else {
-        upper_new_prev = upper_2_pt_new;
-        upper_new_next = upper_1_pt_new;
-    }
+    Segment_2 upper_prev_edge = upper_1_prev_crossing ? upper_2_new : upper_1_new;
+    Segment_2 upper_next_edge = upper_1_prev_crossing ? upper_1_new : upper_2_new;
+    Segment_2 lower_prev_edge = lower_1_prev_crossing ? lower_2_new : lower_1_new;
+    Segment_2 lower_next_edge = lower_1_prev_crossing ? lower_1_new : lower_2_new;
+
+    // these are the points that are adjacent to the vertex in question
+    Point_2 upper_prev_pt = upper_prev_edge.source() == vertex_point ? upper_prev_edge.target() : upper_prev_edge.source();
+    Point_2 upper_next_pt = upper_next_edge.source() == vertex_point ? upper_next_edge.target() : upper_next_edge.source();
+    Point_2 lower_prev_pt = lower_prev_edge.source() == vertex_point ? lower_prev_edge.target() : lower_prev_edge.source();
+    Point_2 lower_next_pt = lower_next_edge.source() == vertex_point ? lower_next_edge.target() : lower_next_edge.source();
 
     // Given the vector from upper_prev to upper_next,
     // the one on the right side of the vector is the right side of upper_1 and upper_2
     Eigen::Vector2d upper_vec(
-        CGAL::to_double(upper_new_next.x() - upper_new_prev.x()), 
-        CGAL::to_double(upper_new_next.y() - upper_new_prev.y())
+        CGAL::to_double(upper_next_pt.x() - upper_prev_pt.x()), 
+        CGAL::to_double(upper_next_pt.y() - upper_prev_pt.y())
     );
 
-    Eigen::Vector2d lower_1_vec(
-        CGAL::to_double(lower_1_pt_new.x() - upper_new_prev.x()), 
-        CGAL::to_double(lower_1_pt_new.y() - upper_new_prev.y())
+    // a vector from vertex to lower_prev
+    Eigen::Vector2d lower_prev_vec(
+        CGAL::to_double(lower_prev_pt.x() - vertex_point.x()), 
+        CGAL::to_double(lower_prev_pt.y() - vertex_point.y())
     );
-    Eigen::Vector2d lower_2_vec(
-        CGAL::to_double(lower_2_pt_new.x() - upper_new_prev.x()), 
-        CGAL::to_double(lower_2_pt_new.y() - upper_new_prev.y())
+    Eigen::Vector2d lower_next_vec(
+        CGAL::to_double(lower_next_pt.x() - vertex_point.x()), 
+        CGAL::to_double(lower_next_pt.y() - vertex_point.y())
     );
 
     // Compute 2D cross product (z-component of 3D cross product)
-    double cross_1 = upper_vec.x() * lower_1_vec.y() - upper_vec.y() * lower_1_vec.x();
-    double cross_2 = upper_vec.x() * lower_2_vec.y() - upper_vec.y() * lower_2_vec.x();
+    double cross_1 = upper_vec.x() * lower_prev_vec.y() - upper_vec.y() * lower_prev_vec.x();
+    double cross_2 = upper_vec.x() * lower_next_vec.y() - upper_vec.y() * lower_next_vec.x();
 
     Segment_2 lower_occluded, lower_visible;
 
@@ -205,26 +266,75 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
         returning_qi.push_back({upper_2_new, upper_qi});
     }
 
-    if (
-        qi.at(lower_visible) != -1 &&
-        qi.at(lower_visible) >= upper_qi && // upper casing edges must have higher qi than lower casing edges
-        upper_qi != -1 // upper casing edges must have a qi
-    ) {
-        int qi_base = qi.at(lower_visible);
-        returning_qi.push_back({lower_visible, qi_base});
-        returning_qi.push_back({lower_occluded, qi_base + 1});
-    } else if (
-        qi.at(lower_occluded) != -1 &&
-        qi.at(lower_occluded) > 0 && // qi_base - 1 > 0 must hold
-        qi.at(lower_occluded) >= upper_qi && // upper casing edges must have higher qi than lower casing edges
-        upper_qi != -1 // upper casing edges must have a qi
-    ) {
-        int qi_base = qi.at(lower_occluded);
-        returning_qi.push_back({lower_visible, qi_base - 1});
-        returning_qi.push_back({lower_occluded, qi_base});
+    int lower_qi = -1;
+
+    if (is_cut.at(upper_1_new) && is_cut.at(upper_2_new)) {
+      // if the upper is a cut, nothing changes on all the points
+      lower_qi = qi.at(lower_visible);
+
+      if (lower_qi != -1) {
+        returning_qi.push_back({lower_visible, lower_qi});
+        returning_qi.push_back({lower_occluded, lower_qi});
+      }
+    } else if (is_cut.at(lower_1_new) && is_cut.at(lower_2_new)) {
+      // if the lower is a cut, only the cut gets smaller on the left side of the upper
+      lower_qi = qi.at(lower_visible);
+
+      if (lower_qi != -1) {
+        returning_qi.push_back({lower_visible, lower_qi});
+        returning_qi.push_back({lower_occluded, lower_qi + 1});
+      }
+    } else {
+      lower_qi = qi.at(lower_visible);
+
+      if (lower_qi != -1 && lower_qi >= upper_qi) {
+        returning_qi.push_back({lower_visible, lower_qi});
+        returning_qi.push_back({lower_occluded, lower_qi + 1});
+      } 
     }
 
     return {true, returning_qi};
+}
+
+std::tuple<bool, std::vector<std::pair<Segment_2, int>>>
+is_threeway(const Arrangement_with_history_2 &arr,
+            const std::map<Segment_2, int, Segment2Comparator> &qi,
+            const std::map<Segment_2, bool, Segment2Comparator> &is_cut,
+            Vertex_const_iterator &vertex) {
+  // a threeway has one cut and two non-cut edges
+  std::vector<Segment_2> cut_segments;
+  std::vector<Segment_2> non_cut_segments;
+  for (auto it = vertex->incident_halfedges(); it != vertex->incident_halfedges(); it++) {
+    if (is_cut.at(it->curve())) {
+      cut_segments.push_back(it->curve());
+    } else {
+      non_cut_segments.push_back(it->curve());
+    }
+  }
+  
+  if (cut_segments.size() != 1 || non_cut_segments.size() != 2) {
+    return {false, {}};
+  }
+
+  // on a threeway, the qi must be assigned as q, q, q
+  int qi_value = -1;
+  if (qi.at(cut_segments[0]) != -1) {
+    qi_value = qi.at(cut_segments[0]);
+  } else if (qi.at(non_cut_segments[0]) != -1) {
+    qi_value = qi.at(non_cut_segments[0]);
+  } else if (qi.at(non_cut_segments[1]) != -1) {
+    qi_value = qi.at(non_cut_segments[1]);
+  }
+
+  std::vector<std::pair<Segment_2, int>> returning_qi;
+
+  if (qi_value != -1) {
+    returning_qi.push_back({cut_segments[0], qi_value});
+    returning_qi.push_back({non_cut_segments[0], qi_value});
+    returning_qi.push_back({non_cut_segments[1], qi_value});
+  }
+
+  return {true, returning_qi};
 }
 
 // tells if the given point is a singularity.
@@ -304,7 +414,7 @@ void propagate_qi(
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
     const std::map<Point_2, Segment_2> &upper_casing_edges,
     const std::map<Point_2, Segment_2> &lower_casing_edges,
-    const std::map<Point_2, Point_2> &next,
+    const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
     std::map<Segment_2, int, Segment2Comparator> &qi
 ) {
     // the queue of segments to be propagated
@@ -317,7 +427,7 @@ void propagate_qi(
 
         point_to_vertex[vertex->point()] = vertex;
 
-        auto [crossing_found, qi_crossing] = is_crossing(arr, qi, upper_casing_edges, lower_casing_edges, next, vertex);
+        auto [crossing_found, qi_crossing] = is_crossing(arr, qi, upper_casing_edges, lower_casing_edges, segment_orientation, segment_is_cut, vertex);
 
         if (crossing_found) {
             for (auto [segment, qi_value] : qi_crossing) {
@@ -325,7 +435,16 @@ void propagate_qi(
                     q.push({qi_value, segment});
                 }
             }
+        }
 
+        auto [threeway_found, qi_threeway] = is_threeway(arr, qi, segment_is_cut, vertex);
+
+        if (threeway_found) {
+            for (auto [segment, qi_value] : qi_threeway) {
+                if (qi.at(segment) == -1) {
+                    q.push({qi_value, segment});
+                }
+            }
         }
 
         auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, vertex);
@@ -401,7 +520,7 @@ void propagate_qi(
 
         for (auto vertex : vertices_to_check) {
             if (is_terminus(arr, point_is_singularity, vertex)) {
-                auto [crossing_found, qi_crossing] = is_crossing(arr, qi, upper_casing_edges, lower_casing_edges, next, vertex);
+                auto [crossing_found, qi_crossing] = is_crossing(arr, qi, upper_casing_edges, lower_casing_edges, segment_orientation, segment_is_cut, vertex);
 
                 if (crossing_found) {
                     for (auto [segment, qi_value] : qi_crossing) {
@@ -410,7 +529,17 @@ void propagate_qi(
                         }
                     }
                 }
-                
+
+                auto [threeway_found, qi_threeway] = is_threeway(arr, qi, segment_is_cut, vertex);
+
+                if (threeway_found) {
+                    for (auto [segment, qi_value] : qi_threeway) {
+                        if (qi.at(segment) == -1) {
+                            q.push({qi_value, segment});
+                        }
+                    }
+                }
+
                 auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, vertex);
         
                 if (singularity_found) {
@@ -457,7 +586,7 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
                  upper_casing_edges, lower_casing_edges, segment_orientation, qi);
 
-    // 2. propagate the qi from the "lowest winding number" edges
+    // 2. propagate the qi from the edges where the winding number on the right side face is the lowest
     assign_lowest_wn_qi(arr, wn, segment_orientation, qi);
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
                  upper_casing_edges, lower_casing_edges, segment_orientation, qi);

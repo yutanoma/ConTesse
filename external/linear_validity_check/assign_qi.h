@@ -17,8 +17,7 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     // given an intersection point, which edges are the upper and lower casing edges?
     std::map<Point_2, Segment_2> &upper_casing_edges,
     std::map<Point_2, Segment_2> &lower_casing_edges,
-    // given a point, which point is the next point in the circular order?
-    // *exclude* the self-intersection point in this list
-    std::map<Point_2, Point_2> &next
+    // given a segment, does segment.source() -> segment.target() matches the canonical orientation?
+    std::map<Segment_2, int, Segment2Comparator> &segment_orientation
 );
 } // namespace utils
