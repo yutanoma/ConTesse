@@ -86,11 +86,12 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
   for (auto it = arr.faces_begin(); it != arr.faces_end(); it++) {
     visited[it] = false;
   }
+
+  auto [segment_to_left_face, segment_to_right_face] = segment_to_face(arr, segment_orientation);
   
   size_t processed = 0;
   while (face_queue.size() != 0) {
     auto current_face = face_queue[processed];
-    int current_wn = wn[current_face];
     
     // Process all incident edges (both outer boundary and holes)
     auto process_halfedge = [&](const auto &he) {
@@ -101,53 +102,17 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
       }
 
       visited[twin_face] = true;
-      
-      // Check if we've already processed this face
-      if (wn.find(twin_face) == wn.end()) {
-        // Get the curve segment
-        auto segment = he->curve();
-        
-        // Find the orientation in the map
-        auto orient_it = segment_orientation.find(segment);
-        if (orient_it == segment_orientation.end()) {
-          // If segment not found, try the reverse direction
-          auto reverse_segment = Segment_2(segment.target(), segment.source());
-          orient_it = segment_orientation.find(reverse_segment);
-        }
-        
-        if (orient_it != segment_orientation.end()) {
-          int orientation = orient_it->second;
-          
-          // Determine if halfedge direction matches segment direction
-          bool directions_match = (he->source()->point() == segment.source() && he->target()->point() == segment.target());
-          
-          // Calculate winding number change
-          int delta = 0;
-          if (orientation == 1) {
-            // Left side gets +1, right side gets -1
-            if (directions_match) {
-              // Current face is on the left, twin face is on the right
-              delta = -1; // twin face gets current_wn -1
-            } else {
-              // Current face is on the right, twin face is on the left  
-              delta = 1; // twin face gets current_wn + 1
-            }
-          } else if (orientation == -1) {
-            // Right side gets +1, left side gets 0 (flipped from above)
-            if (directions_match) {
-              // Current face is on the right, twin face is on the left
-              delta = 1; // twin face gets current_wn + 1
-            } else {
-              // Current face is on the left, twin face is on the right
-              delta = -1; // twin face gets current_wn - 1
-            }
-          }
-          
-          // Set winding number for twin face
-          int twin_wn = current_wn + delta;
-          wn[twin_face] = twin_wn;
-          face_queue.push_back(twin_face);
-        }
+
+      auto segment = he->curve();
+      auto left_face = segment_to_left_face.at(segment);
+      auto right_face = segment_to_right_face.at(segment);
+
+      if (left_face == current_face) {
+        wn[right_face] = wn[current_face] - 1;
+      } else if (right_face == current_face) {
+        wn[left_face] = wn[current_face] + 1;
+      } else {
+        throw std::runtime_error("Error: neither are on the same side");
       }
     };
     

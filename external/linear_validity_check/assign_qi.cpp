@@ -579,7 +579,7 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     }
 
     // 0. assign the winding number to each face
-    std::map<Face_const_handle, int> wn = face_wn(arr);
+    std::map<Face_const_handle, int> wn = face_wn(arr, segment_orientation);
 
     // 1. propagate the qi from the silhouette
     assign_silhouette_qi(arr, qi);

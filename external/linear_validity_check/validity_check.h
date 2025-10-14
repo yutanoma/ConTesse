@@ -9,7 +9,8 @@ std::tuple<
 > segment_to_face(const Arrangement_with_history_2 &arr,
   const std::map<Segment_2, int, Segment2Comparator> &segment_orientation);
 
-std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr);
+std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
+                                         const std::map<Segment_2, int, Segment2Comparator> &segment_orientation);
 
 // check if the qi is consistent with the arrangement
 // it checks if
