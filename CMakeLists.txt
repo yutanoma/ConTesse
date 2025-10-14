@@ -139,6 +139,7 @@ file(GLOB CONTESS_SRCS
   "src/lift_min_surface.h"
   "src/lift_patch_components.cpp"
   "src/lift_patch_components.h"
+  "src/linear_wso_check.cpp"
   "src/logger.cpp"
   "src/logger.h"
   "src/make_cut_feasible.cpp"
@@ -228,6 +229,7 @@ target_link_libraries(Base${PROJECT_NAME} PUBLIC
     nlohmannjson::nlohmannjson
     subdeval::subdeval
     igl::igl
+    linear_validity_check::linear_validity_check
 )
 target_compile_definitions(Base${PROJECT_NAME} PUBLIC 
   "CONTOURS_TESSELATION_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\""
