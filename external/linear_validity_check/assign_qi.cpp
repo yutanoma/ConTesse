@@ -438,9 +438,8 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     // given an intersection point, which "old" edges are the upper and lower casing edges?
     std::map<Point_2, Segment_2> &upper_casing_edges,
     std::map<Point_2, Segment_2> &lower_casing_edges,
-    // given a point, which point is the next point in the circular order?
-    // *exclude* the self-intersection point in this list
-    std::map<Point_2, Point_2> &next
+    // given a segment, does segment.source() -> segment.target() matches the canonical orientation?
+    std::map<Segment_2, int, Segment2Comparator> &segment_orientation
 ) {
     // store the propagated qi
     // this is based on the "new" segments on the planar map
@@ -456,15 +455,21 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     // 1. propagate the qi from the silhouette
     assign_silhouette_qi(arr, qi);
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
-                 upper_casing_edges, lower_casing_edges, next, qi);
+                 upper_casing_edges, lower_casing_edges, segment_orientation, qi);
 
     // 2. propagate the qi from the "lowest winding number" edges
-    assign_lowest_wn_qi(arr, qi);
+    assign_lowest_wn_qi(arr, wn, segment_orientation, qi);
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
-                 upper_casing_edges, lower_casing_edges, next, qi);
+                 upper_casing_edges, lower_casing_edges, segment_orientation, qi);
 
     // finally, check the validity for each vertex / singularity
-    auto [is_valid, qi_mismatch_positions] = check_qi_mismatch(arr, next, qi, is_segment_invalid);
+    std::map<Segment_2, bool, Segment2Comparator> is_segment_invalid;
+    for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
+        Segment_2 segment = it->curve();
+        is_segment_invalid[segment] = false;
+    }
+
+    auto [is_valid, qi_mismatch_positions] = check_qi_mismatch(arr, segment_orientation, qi, is_segment_invalid);
 
     return {is_valid, qi, qi_mismatch_positions};
 }

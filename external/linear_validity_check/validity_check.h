@@ -18,7 +18,7 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr);
 // no need for the convexity or casing information
 std::tuple<bool, std::vector<Point_2>>
 check_qi_mismatch(const Arrangement_with_history_2 &arr,
-                  const std::map<Point_2, Point_2> &next,
+                  const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
                   const std::map<Segment_2, int, Segment2Comparator> &qi,
                   // invalid segments will be ignored for this check
                   const std::map<Segment_2, bool, Segment2Comparator> &is_segment_invalid
