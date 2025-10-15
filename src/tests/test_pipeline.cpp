@@ -54,6 +54,7 @@
 #include "lift_min_surface.h"
 #include "shor.h"
 #include "triangulate_wso_patches.h"
+#include "linear_wso_check.h"
 
 #include "cdt_non_SO_component.h"
 #include "decompose_wso_triangulation.h"
@@ -77,6 +78,8 @@ size_t max_subdiv_level = 5;
 
 bool ff_only = false;
 bool use_heuristics = true;
+
+bool use_our_linear_validity_check = true;
 
 real_t max_loop_length = 100;
 // real_t max_loop_length = 200;
@@ -341,6 +344,12 @@ bool run_WSO(std::string const output_dir, const TestCase &t_case,
       std::map<size_t, Mesh> patch_triangulations2;
       triangulate_wso_patches(mesh, camera, patch_triangulations2, do_refine,
                               affected_patches, ff_only);
+
+      if (use_our_linear_validity_check) {
+        logger().info("linear_validity_check");
+        linear_wso_check(mesh, camera, patch_triangulations2);
+        logger().info("linear_validity_check done.");
+      }
 
       // Combine patches
       std::map<size_t, Mesh> patch_triangulations_comb;
