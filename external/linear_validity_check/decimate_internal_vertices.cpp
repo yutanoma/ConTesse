@@ -204,7 +204,7 @@ namespace details {
   };
 }
   
-  inline std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::VectorXi>
+  std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::VectorXi>
   decimate_internal_vertices(const Eigen::MatrixXd &V,
                              const Eigen::MatrixXi &F,
                              const Eigen::VectorXi &is_decimating)
