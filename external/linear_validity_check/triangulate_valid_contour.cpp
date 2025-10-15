@@ -1,5 +1,8 @@
 #include "triangulate_valid_contour.h"
 #include "validity_check.h"
+#include "tessellate_face.h"
+#include "decimate_internal_vertices.h"
+#include "simplify_triangulation.h"
 
 namespace utils {
 // tessellation of a face
@@ -14,7 +17,22 @@ namespace utils {
 using tessellation_t =
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXi,
                Eigen::MatrixXi, Eigen::MatrixXi, std::map<Point_2, int>,
-               std::map<Segment_2, int>>;
+               std::map<Segment_2, int, Segment2Comparator>>;
+
+// glue tessellations across faces/layers into a single vertex/face list
+static std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, std::vector<Point_2>>
+glue_tessellations(
+    const std::map<std::pair<int, Face_const_handle>, tessellation_t> &/*face_to_tessellation*/,
+    const std::map<std::pair<int, Segment_2>, bool> &/*left_side_exists*/,
+    const std::map<std::pair<int, Segment_2>, bool> &/*right_side_exists*/,
+    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>> &/*left_side_face*/,
+    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>> &/*right_side_face*/)
+{
+  Eigen::MatrixXd V(0, 2);
+  Eigen::MatrixXi F(0, 3);
+  std::vector<Point_2> V_to_point;
+  return {V, F, V_to_point};
+}
 
 std::tuple <
   std::map<std::pair<int, Segment_2>, bool>,
@@ -46,6 +64,7 @@ std::tuple <
     auto right_face = segment_to_right_face.at(segment);
     auto left_wn = wn.at(left_face);
     auto right_wn = wn.at(right_face);
+    (void)left_wn; // left_wn is currently unused
 
     if (segment_is_cut.at(segment)) {
       for (int i = 0; i < right_wn + 1; i++) {
