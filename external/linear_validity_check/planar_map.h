@@ -61,6 +61,14 @@ struct Segment2Comparator {
     }
 };
 
+struct IntSegmentPairComparator {
+  bool operator()(const std::pair<int, Segment_2>& a,
+                  const std::pair<int, Segment_2>& b) const {
+      if (a.first != b.first) return a.first < b.first;
+      return Segment2Comparator{}(a.second, b.second);
+  }
+};
+
 bool is_identical_segment(const Segment_2 &s1, const Segment_2 &s2);
 
 std::tuple<

@@ -48,8 +48,8 @@ std::map<Segment_2, int, Segment2Comparator> segment_to_orientation(
     auto v0_this = this_segment.source();
     auto v1_this = this_segment.target();
 
-    Eigen::Vector2d v0_this_2d(v0_this.x(), v0_this.y());
-    Eigen::Vector2d v1_this_2d(v1_this.x(), v1_this.y());
+    Eigen::Vector2d v0_this_2d(CGAL::to_double(v0_this.x()), CGAL::to_double(v0_this.y()));
+    Eigen::Vector2d v1_this_2d(CGAL::to_double(v1_this.x()), CGAL::to_double(v1_this.y()));
 
     double d00 = (v0_this_2d - v0_2d).norm();
     double d10 = (v1_this_2d - v0_2d).norm();
@@ -342,14 +342,14 @@ segment_to_casing_edges(
     Point_2 original_point_2_1 = original_segment_2.source();
     Point_2 original_point_2_2 = original_segment_2.target();
 
-    Eigen::Vector2d original_point_1_1_2d(original_point_1_1.x(), original_point_1_1.y());
-    Eigen::Vector2d original_point_1_2_2d(original_point_1_2.x(), original_point_1_2.y());
-    Eigen::Vector2d original_point_2_1_2d(original_point_2_1.x(), original_point_2_1.y());
-    Eigen::Vector2d original_point_2_2_2d(original_point_2_2.x(),
-                                          original_point_2_2.y());
+    Eigen::Vector2d original_point_1_1_2d(CGAL::to_double(original_point_1_1.x()), CGAL::to_double(original_point_1_1.y()));
+    Eigen::Vector2d original_point_1_2_2d(CGAL::to_double(original_point_1_2.x()), CGAL::to_double(original_point_1_2.y()));
+    Eigen::Vector2d original_point_2_1_2d(CGAL::to_double(original_point_2_1.x()), CGAL::to_double(original_point_2_1.y()));
+    Eigen::Vector2d original_point_2_2_2d(CGAL::to_double(original_point_2_2.x()),
+                                          CGAL::to_double(original_point_2_2.y()));
 
     Eigen::Vector2d intersection_2d(
-        point.x(), point.y()
+        CGAL::to_double(point.x()), CGAL::to_double(point.y())
     );
 
     double d_1_total = (original_point_1_1_2d - original_point_1_2_2d).norm();
@@ -435,7 +435,7 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
   }
 
   // 4. tessellate the valid contour
-  auto [V_out, F_out, V_to_point] = triangulate_valid_contour(arr, qi, segment_orientation);
+  auto [V_out, F_out, V_to_point] = triangulate_valid_contour(arr, qi, segment_orientation, segment_is_cut);
 
   // 5. get the map from the original vertices to the new vertices
   Eigen::VectorXi V_JI(V_out.rows());

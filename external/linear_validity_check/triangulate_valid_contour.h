@@ -11,5 +11,6 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, std::vector<Point_2>>
 triangulate_valid_contour(
     const Arrangement_with_history_2 &arr,
     const std::map<Segment_2, int, Segment2Comparator> &qi,
-    const std::map<Segment_2, int, Segment2Comparator> &segment_orientation);
+    const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+    const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut);
 } // namespace utils

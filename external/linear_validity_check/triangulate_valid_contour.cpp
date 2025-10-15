@@ -23,10 +23,10 @@ using tessellation_t =
 static std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, std::vector<Point_2>>
 glue_tessellations(
     const std::map<std::pair<int, Face_const_handle>, tessellation_t> &/*face_to_tessellation*/,
-    const std::map<std::pair<int, Segment_2>, bool> &/*left_side_exists*/,
-    const std::map<std::pair<int, Segment_2>, bool> &/*right_side_exists*/,
-    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>> &/*left_side_face*/,
-    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>> &/*right_side_face*/)
+    const std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator> &/*left_side_exists*/,
+    const std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator> &/*right_side_exists*/,
+    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator> &/*left_side_face*/,
+    const std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator> &/*right_side_face*/)
 {
   Eigen::MatrixXd V(0, 2);
   Eigen::MatrixXi F(0, 3);
@@ -35,10 +35,10 @@ glue_tessellations(
 }
 
 std::tuple <
-  std::map<std::pair<int, Segment_2>, bool>,
-  std::map<std::pair<int, Segment_2>, bool>,
-  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>>,
-  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>>
+  std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator>,
+  std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator>,
+  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator>,
+  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator>
 > get_left_right_side_faces(
   const Arrangement_with_history_2 &arr,
   const std::map<Face_const_handle, int> &wn,
@@ -46,12 +46,12 @@ std::tuple <
   const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
   const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut
 ) {
-  std::map<std::pair<int, Segment_2>, bool> left_side_exists;
-  std::map<std::pair<int, Segment_2>, bool> right_side_exists;
+  std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator> left_side_exists;
+  std::map<std::pair<int, Segment_2>, bool, IntSegmentPairComparator> right_side_exists;
 
-  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>>
+  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator>
       right_side_face;
-  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>>
+  std::map<std::pair<int, Segment_2>, std::pair<int, Face_const_handle>, IntSegmentPairComparator>
       left_side_face;
 
   auto [segment_to_left_face, segment_to_right_face] = segment_to_face(arr, segment_orientation);

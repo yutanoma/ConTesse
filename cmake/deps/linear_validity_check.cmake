@@ -18,6 +18,7 @@ target_link_libraries(linear_validity_check PUBLIC
   CGAL::CGAL
   CGAL::CGAL_Core
   Eigen3::Eigen
+  igl::igl
 )
 target_include_directories(linear_validity_check PUBLIC
   ${LINEAR_VALIDITY_CHECK_SOURCE_DIR}
