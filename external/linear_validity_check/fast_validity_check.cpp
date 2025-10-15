@@ -435,18 +435,24 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
   }
 
   // 4. tessellate the valid contour
-  auto [V_out, F_out, point_to_idx] = triangulate_valid_contour(arr, qi);
+  auto [V_out, F_out, V_to_point] = triangulate_valid_contour(arr, qi, segment_orientation);
 
   // 5. get the map from the original vertices to the new vertices
-  Eigen::VectorXi V_IJ(V_2d.rows());
+  Eigen::VectorXi V_JI(V_out.rows());
   {
-    for (auto point : point_to_node) {
-      auto original_vid = point.second;
-      auto new_vid = point_to_idx[point.first];
-      V_IJ(original_vid) = new_vid;
+    for (int vid_final = 0; vid_final < V_to_point.size(); vid_final++) {
+      auto point = V_to_point[vid_final];
+
+      if (point_to_node.find(point) == point_to_node.end()) {
+        std::cerr << "Error: point not found" << std::endl;
+        throw std::runtime_error("Error: point not found");
+      }
+
+      auto original_vid = point_to_node.at(point);
+      V_JI(vid_final) = original_vid;
     }
   }
 
-  return {true, V_out, F_out, V_IJ};
+  return {true, V_out, F_out, V_JI};
 }
 } // namespace utils

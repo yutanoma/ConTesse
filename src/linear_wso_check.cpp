@@ -172,18 +172,19 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
       }
     }
 
-    auto [is_wso_succeeded, V_out, F_out, V_IJ] = utils::fast_validity_check(
+    auto camera_pos = static_cast<Eigen::Vector3d>(camera.position());
+    auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
         vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
-        vertex_is_cusp, vertex_is_singularity);
+        vertex_is_cusp, vertex_is_singularity, camera_pos);
 
     if (!is_wso_succeeded) {
       logger().error("Linear WSO check failed on patch {}.", patch_id);
       continue;
     }
 
-    std::vector<size_t> vid_original(V_IJ.size());
-    for (size_t i = 0; i < V_IJ.size(); i++) {
-      vid_original[V_IJ(i)] = vertices[i].idx();
+    std::vector<size_t> vid_original(V_JI.size());
+    for (int i = 0; i < V_JI.size(); i++) {
+      vid_original[i] = vertices[V_JI(i)].idx();
     }
 
     patch_triangulations[patch_id] = Mesh();
