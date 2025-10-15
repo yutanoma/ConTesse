@@ -23,11 +23,6 @@ bool operator()(const QueueEntry& a, const QueueEntry& b) const noexcept {
 
 using SegmentQueue = std::priority_queue<QueueEntry, std::vector<QueueEntry>, CompareByQi>;
 
-bool is_identical_segment(const Segment_2 &s1, const Segment_2 &s2) {
-    return (s1.source() == s2.source() && s1.target() == s2.target()) ||
-           (s1.source() == s2.target() && s1.target() == s2.source());
-}
-
 void assign_silhouette_qi(
     Arrangement_with_history_2 &arr,
     std::map<Segment_2, int, Segment2Comparator> &qi

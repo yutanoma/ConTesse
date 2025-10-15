@@ -60,27 +60,14 @@ struct Segment2Comparator {
     }
 };
 
-struct Intersection {
-    Segment_2 segment1, segment2;
-    Point_2 p1_1, p1_2;
-    Point_2 p2_1, p2_2;
-    double t1, t2;
-    Point_2 intersection_point;
-    Eigen::Vector2d point;
-};
-
-std::vector<Intersection> planar_map_intersections(
-    const Arrangement_with_history_2 &arr_with_history
-);
+bool is_identical_segment(const Segment_2 &s1, const Segment_2 &s2);
 
 std::tuple<
     Arrangement_with_history_2,
-    std::map<Point_2, std::pair<int, int>>,
-    std::map<Segment_2, std::pair<int, int>, Segment2Comparator>
+    std::map<Point_2, int>,
+    std::map<Segment_2, int, Segment2Comparator>
 > planar_map(
-    const std::vector<
-        std::pair<Eigen::MatrixXd, Eigen::MatrixXi>
-    > &contours_2d
+    const Eigen::MatrixXd &V_2d,
+    const Eigen::MatrixXi &E_connectivity
 );
-
 }
