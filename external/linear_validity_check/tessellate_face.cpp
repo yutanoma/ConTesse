@@ -57,21 +57,23 @@ tessellate_face(const Arrangement_with_history_2 &arr,
   };
 
   // Process outer boundary
-  auto outer_ccb = face->outer_ccb();
-  if (outer_ccb != CGAL::Arrangement_2<Traits_2>::Ccb_halfedge_circulator()) {
-    std::vector<int> outer_vertices;
-    auto he = outer_ccb;
-    do {
-      Point_2 source = he->source()->point();
-      int vid = add_point(source);
-      outer_vertices.push_back(vid);
-      ++he;
-    } while (he != outer_ccb);
-    
-    // Add constraints for outer boundary
-    for (size_t i = 0; i < outer_vertices.size(); ++i) {
-      int next = (i + 1) % outer_vertices.size();
-      add_constraint(outer_vertices[i], outer_vertices[next]);
+  if (face->has_outer_ccb()) {
+    auto outer_ccb = face->outer_ccb();
+    if (outer_ccb != CGAL::Arrangement_2<Traits_2>::Ccb_halfedge_circulator()) {
+      std::vector<int> outer_vertices;
+      auto he = outer_ccb;
+      do {
+        Point_2 source = he->source()->point();
+        int vid = add_point(source);
+        outer_vertices.push_back(vid);
+        ++he;
+      } while (he != outer_ccb);
+      
+      // Add constraints for outer boundary
+      for (size_t i = 0; i < outer_vertices.size(); ++i) {
+        int next = (i + 1) % outer_vertices.size();
+        add_constraint(outer_vertices[i], outer_vertices[next]);
+      }
     }
   }
   

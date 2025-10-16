@@ -1,0 +1,18 @@
+# lldb debug script for DebugFastValidityCheck
+# Set breakpoints at key locations
+
+# Break at the start of fast_validity_check
+breakpoint set --name utils::fast_validity_check
+
+# Break at the start of planar_map function (where the crash likely occurs)
+breakpoint set --name planar_map
+
+# Break at the start of main
+breakpoint set --name main
+
+# Set up some useful aliases
+command alias print_matrix print "Matrix size: %1.rows() x %1.cols()"
+command alias print_vector print "Vector size: %1.size()"
+
+# Run the program
+run

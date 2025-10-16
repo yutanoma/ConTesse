@@ -240,7 +240,15 @@ unify_simplified_meshes(
         Vnew(i,1) = Vnew_vec[i](1);
     }
 
-    return {Vnew, Fnew, orig2rep};
+    Eigen::VectorXi Vnew_to_orig = Eigen::VectorXi::Constant(Vnew.rows(), -1);
+    for (int i = 0; i < orig2rep.rows(); i++) {
+      int new_id = orig2rep(i);
+      if (new_id != -1) {
+        Vnew_to_orig(new_id) = i;
+      }
+    }
+
+    return {Vnew, Fnew, Vnew_to_orig};
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::VectorXi>

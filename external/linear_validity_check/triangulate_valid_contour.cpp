@@ -94,6 +94,10 @@ triangulate_valid_contour(
   // 2. get the tessellation of each faces
   std::map<std::pair<int, Face_const_handle>, tessellation_t> face_to_tessellation;
   for (auto it = arr.faces_begin(); it != arr.faces_end(); it++) {
+    if (wn[it] <= 0) {
+      continue;
+    }
+
     auto tessellation = tessellate_face(arr, it);
     int wn_face = wn.at(it);
 

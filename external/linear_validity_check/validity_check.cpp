@@ -79,8 +79,8 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
   wn[unbounded_face] = 0;
   
   // Step 2: Use BFS to propagate winding numbers
-  std::vector<Face_const_handle> face_queue;
-  face_queue.push_back(unbounded_face);
+  std::queue<Face_const_handle> face_queue;
+  face_queue.push(unbounded_face);
 
   std::unordered_map<Face_const_handle, bool> visited;
   for (auto it = arr.faces_begin(); it != arr.faces_end(); it++) {
@@ -91,8 +91,15 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
   
   size_t processed = 0;
   while (face_queue.size() != 0) {
-    auto current_face = face_queue[processed];
-    
+    auto current_face = face_queue.front();
+    face_queue.pop();
+
+    if (visited[current_face]) {
+      continue;
+    }
+
+    visited[current_face] = true;
+
     // Process all incident edges (both outer boundary and holes)
     auto process_halfedge = [&](const auto &he) {
       auto twin_face = he->twin()->face();
@@ -100,8 +107,6 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
       if (visited[twin_face]) {
         return;
       }
-
-      visited[twin_face] = true;
 
       auto segment = he->curve();
       auto left_face = segment_to_left_face.at(segment);
@@ -114,18 +119,22 @@ std::map<Face_const_handle, int> face_wn(const Arrangement_with_history_2 &arr,
       } else {
         throw std::runtime_error("Error: neither are on the same side");
       }
+
+      face_queue.push(twin_face);
     };
-    
+
     // Process outer boundary
-    auto outer_ccb = current_face->outer_ccb();
-    if (outer_ccb != CGAL::Arrangement_2<Traits_2>::Ccb_halfedge_circulator()) {
-      auto he = outer_ccb;
-      do {
-        process_halfedge(he);
-        ++he;
-      } while (he != outer_ccb);
+    if (current_face->has_outer_ccb()) {
+      auto outer_ccb = current_face->outer_ccb();
+      if (outer_ccb != CGAL::Arrangement_2<Traits_2>::Ccb_halfedge_circulator()) {
+        auto he = outer_ccb;
+        do {
+          process_halfedge(he);
+          ++he;
+        } while (he != outer_ccb);
+      }
     }
-    
+
     // Process holes
     for (auto hole_it = current_face->holes_begin(); hole_it != current_face->holes_end(); ++hole_it) {
       auto hole_ccb = *hole_it;

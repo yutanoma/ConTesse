@@ -143,6 +143,8 @@ segment_to_convex(const Arrangement_with_history_2 &arr,
       continue;
     }
 
+    segments_group.emplace_back(std::vector<Segment_2>());
+
     auto current_itr = itr;
     do {
       auto segment = current_itr->curve();
@@ -402,19 +404,37 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
   // 1. create the planar map
   // point_to_node is the map from the *original* vertices to the new vertices
   // i.e., does not include any intersection points
-  // segment_to_segment is the map from the *original* segments to the new segments
-  // i.e., does not include any new segments made by intersections
+  // segment_to_segment is the map from the *original* segments to the new
+  // segments i.e., does not include any new segments made by intersections
+  std::cout << "constructing planar map" << std::endl;
   auto [arr, point_to_node, segment_to_segment] =
       planar_map(V_2d, E_connectivity);
+  std::cout << "constructed planar map" << std::endl;
 
   // 2. get the labeling
-  auto segment_orientation = segment_to_orientation(arr, segment_to_segment, point_to_node, V_2d, E_connectivity, E_sign);
+  std::cout << "getting labeling" << std::endl;
+  auto segment_orientation = segment_to_orientation(
+      arr, segment_to_segment, point_to_node, V_2d, E_connectivity, E_sign);
+  std::cout << "got segment orientation" << std::endl;
+
+  std::cout << "getting segment is cut" << std::endl;
   auto segment_is_cut = segment_to_cut(arr, segment_to_segment, E_is_cut);
+  std::cout << "got segment is cut" << std::endl;
+
+  std::cout << "getting point is singularity" << std::endl;
   auto point_is_singularity = point_to_singularity(arr, point_to_node, V_is_singularity);
+  std::cout << "got point is singularity" << std::endl;
+
+  std::cout << "getting upper and lower casing edges" << std::endl;
   auto [upper_casing_edges, lower_casing_edges] =
       segment_to_casing_edges(arr, point_to_node, V_3d, V_is_cusp, camera_pos);
+  std::cout << "got upper and lower casing edges" << std::endl;
 
+  std::cout << "getting face winding numbers" << std::endl;
   auto wn = face_wn(arr, segment_orientation);
+  std::cout << "got face winding numbers" << std::endl;
+
+  std::cout << "getting left and right faces" << std::endl;
   auto [left_face, right_face] = segment_to_face(arr, segment_orientation);
   std::map<Segment_2, int, Segment2Comparator> right_wn;
   for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
@@ -422,20 +442,28 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
     auto rf = right_face.at(segment);
     right_wn[segment] = wn.at(rf);
   }
+  std::cout << "got left and right faces" << std::endl;
 
-  auto segment_is_convex = segment_to_convex(arr, right_wn, point_to_node, segment_is_cut, V_is_cusp);
+  std::cout << "getting segment is convex" << std::endl;
+  auto segment_is_convex = segment_to_convex(arr, right_wn, point_to_node,
+                                             segment_is_cut, V_is_cusp);
+  std::cout << "got segment is convex" << std::endl;
 
   // 3. check the validity
+  std::cout << "checking validity" << std::endl;
   auto [is_valid, qi, qi_mismatch_positions] = validity_check(
       arr, point_is_singularity, segment_is_convex, segment_is_cut, upper_casing_edges,
       lower_casing_edges, segment_orientation);
+  std::cout << "checked validity" << std::endl;
 
   if (!is_valid) {
     return {false, Eigen::MatrixXd(), Eigen::MatrixXi(), Eigen::VectorXi()};
   }
 
   // 4. tessellate the valid contour
+  std::cout << "tessellating valid contour" << std::endl;
   auto [V_out, F_out, V_to_point] = triangulate_valid_contour(arr, qi, segment_orientation, segment_is_cut);
+  std::cout << "tessellated valid contour" << std::endl;
 
   // 5. get the map from the original vertices to the new vertices
   Eigen::VectorXi V_JI(V_out.rows());
