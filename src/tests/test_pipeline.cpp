@@ -267,6 +267,12 @@ bool run_WSO(std::string const output_dir, const TestCase &t_case,
   /////////////
 
   // Run WSO
+  if (use_our_linear_validity_check) {
+    logger().info("linear_validity_check");
+    linear_wso_check(mesh, camera, patch_triangulations);
+    logger().info("linear_validity_check done.");
+  }
+
   bool wso_adaptive = false;
   logger().info("triangulate_wso_patches - wso_adaptive: {}", wso_adaptive);
   bool do_refine = false;
@@ -342,14 +348,15 @@ bool run_WSO(std::string const output_dir, const TestCase &t_case,
 
       logger().info("WSO {}th time", i + 2);
       std::map<size_t, Mesh> patch_triangulations2;
-      triangulate_wso_patches(mesh, camera, patch_triangulations2, do_refine,
-                              affected_patches, ff_only);
 
       if (use_our_linear_validity_check) {
         logger().info("linear_validity_check");
         linear_wso_check(mesh, camera, patch_triangulations2);
         logger().info("linear_validity_check done.");
       }
+
+      triangulate_wso_patches(mesh, camera, patch_triangulations2, do_refine,
+                              affected_patches, ff_only);
 
       // Combine patches
       std::map<size_t, Mesh> patch_triangulations_comb;

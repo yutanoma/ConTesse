@@ -249,3 +249,15 @@ target_link_libraries(Tests${PROJECT_NAME} PUBLIC
   CLI11::CLI11 # command line parser
   Catch2::Catch2 # Unit test framework
 )
+
+## ================== [DebugFastValidityCheck] ============
+add_executable(DebugFastValidityCheck
+  src/tests/debug_fast_validity_check.cpp
+)
+target_include_directories(DebugFastValidityCheck PUBLIC
+  src/
+  external/
+)
+target_link_libraries(DebugFastValidityCheck PUBLIC 
+  linear_validity_check::linear_validity_check
+)
