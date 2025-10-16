@@ -40,6 +40,14 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
   // Initialize all values to -1
   edge_to_idx.vector().assign(edge_to_idx.vector().size(), -1);
 
+  // Remove existing debug inputs directory if it exists
+  {
+    const std::string root_debug_dir = "./debug_inputs";
+    if (std::filesystem::exists(root_debug_dir)) {
+      std::filesystem::remove_all(root_debug_dir);
+    }
+  }
+
   for (auto const &patch_contour : mesh.get_const_patch_chains()) {
     int patch_id = patch_contour.first;
 
@@ -92,6 +100,8 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
         if (cut[mesh.edge(he)] < 0) {
           is_edge_cut.push_back(true);
           edge_signs.push_back(1);
+
+          logger().info("Edge {} is a cut", mesh.edge(he).idx());
         } else {
           is_edge_cut.push_back(false);
 
@@ -112,6 +122,20 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
         }
 
         e_idx++;
+      } else {
+        // it's the second time to see this
+        // this means that the edge is cut
+        // is_edge_cut[edge_to_idx[mesh.edge(he)]] = true;
+        logger().info("Edge {}, index is {} is a cut", mesh.edge(he).idx(),
+                      edge_to_idx[mesh.edge(he)]);
+        is_edge_cut[edge_to_idx[mesh.edge(he)]] = true;
+      }
+    }
+
+    // if this is a back facing patch, reverse the signs of the edges
+    if (facing == FacingType::BACK) {
+      for (size_t i = 0; i < edges.size(); i++) {
+        edge_signs[i] = -edge_signs[i];
       }
     }
 
@@ -158,6 +182,8 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
     for (size_t i = 0; i < vertices.size(); i++) {
       if (is_cusp[vertices[i]]) {
         vertex_is_cusp(i) = 1;
+        logger().info("Vertex {} is a cusp", vertices[i].idx());
+        logger().info("Facing type: {}", cusp_facing[vertices[i]]);
       } else {
         vertex_is_cusp(i) = 0;
       }
@@ -175,38 +201,38 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
     auto camera_pos = static_cast<Eigen::Vector3d>(camera.position());
 
     // Export inputs for debugging
-    std::string debug_dir = "./debug_inputs";
+    std::string debug_dir = "./debug_inputs/" + std::to_string(patch_id);
     std::filesystem::create_directories(debug_dir);
     
-    std::ofstream vertices_3d_file(debug_dir + "/vertices_3d.txt");
+    std::ofstream vertices_3d_file(debug_dir + "/vertices_3d.txt", std::ios::out | std::ios::trunc);
     vertices_3d_file << vertices_3d << std::endl;
     vertices_3d_file.close();
     
-    std::ofstream vertices_2d_file(debug_dir + "/vertices_2d.txt");
+    std::ofstream vertices_2d_file(debug_dir + "/vertices_2d.txt", std::ios::out | std::ios::trunc);
     vertices_2d_file << vertices_2d << std::endl;
     vertices_2d_file.close();
     
-    std::ofstream edges_connectivity_file(debug_dir + "/edges_connectivity.txt");
+    std::ofstream edges_connectivity_file(debug_dir + "/edges_connectivity.txt", std::ios::out | std::ios::trunc);
     edges_connectivity_file << edges_connectivity << std::endl;
     edges_connectivity_file.close();
     
-    std::ofstream edges_sign_file(debug_dir + "/edges_sign.txt");
+    std::ofstream edges_sign_file(debug_dir + "/edges_sign.txt", std::ios::out | std::ios::trunc);
     edges_sign_file << edges_sign << std::endl;
     edges_sign_file.close();
     
-    std::ofstream edges_is_cut_file(debug_dir + "/edges_is_cut.txt");
+    std::ofstream edges_is_cut_file(debug_dir + "/edges_is_cut.txt", std::ios::out | std::ios::trunc);
     edges_is_cut_file << edges_is_cut << std::endl;
     edges_is_cut_file.close();
     
-    std::ofstream vertex_is_cusp_file(debug_dir + "/vertex_is_cusp.txt");
+    std::ofstream vertex_is_cusp_file(debug_dir + "/vertex_is_cusp.txt", std::ios::out | std::ios::trunc);
     vertex_is_cusp_file << vertex_is_cusp << std::endl;
     vertex_is_cusp_file.close();
     
-    std::ofstream vertex_is_singularity_file(debug_dir + "/vertex_is_singularity.txt");
+    std::ofstream vertex_is_singularity_file(debug_dir + "/vertex_is_singularity.txt", std::ios::out | std::ios::trunc);
     vertex_is_singularity_file << vertex_is_singularity << std::endl;
     vertex_is_singularity_file.close();
     
-    std::ofstream camera_pos_file(debug_dir + "/camera_pos.txt");
+    std::ofstream camera_pos_file(debug_dir + "/camera_pos.txt", std::ios::out | std::ios::trunc);
     camera_pos_file << camera_pos.transpose() << std::endl;
     camera_pos_file.close();
     
@@ -214,29 +240,29 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
 
     logger().info("fast_validity_check start");
 
-    auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
-        vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
-        vertex_is_cusp, vertex_is_singularity, camera_pos);
+    // auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
+    //     vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
+    //     vertex_is_cusp, vertex_is_singularity, camera_pos);
+
+    // std::vector<size_t> vid_original(V_JI.size());
+    // for (int i = 0; i < V_JI.size(); i++) {
+    //   vid_original[i] = vertices[V_JI(i)].idx();
+    // }
+
+    // patch_triangulations[patch_id] = Mesh();
+    // to_2d_mesh(mesh, V_out, F_out, vid_original,
+    //            patch_triangulations[patch_id]);
+
+    // auto patch_patchID =
+    //     patch_triangulations[patch_id].face_property<int>("f:patchID");
+    // patch_patchID.vector().assign(patch_patchID.vector().size(), patch_id);
+
+    // if (!is_wso_succeeded) {
+    //   logger().error("Linear WSO check failed on patch {}.", patch_id);
+    //   continue;
+    // }
 
     logger().info("fast_validity_check done");
-
-    if (!is_wso_succeeded) {
-      logger().error("Linear WSO check failed on patch {}.", patch_id);
-      continue;
-    }
-
-    std::vector<size_t> vid_original(V_JI.size());
-    for (int i = 0; i < V_JI.size(); i++) {
-      vid_original[i] = vertices[V_JI(i)].idx();
-    }
-
-    patch_triangulations[patch_id] = Mesh();
-    to_2d_mesh(mesh, V_out, F_out, vid_original,
-               patch_triangulations[patch_id]);
-
-    auto patch_patchID =
-        patch_triangulations[patch_id].face_property<int>("f:patchID");
-    patch_patchID.vector().assign(patch_patchID.vector().size(), patch_id);
 
     // Reset the vertex and edge indices for the next patch
     for (auto vertex : vertices) {

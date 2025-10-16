@@ -69,6 +69,8 @@ struct IntSegmentPairComparator {
   }
 };
 
+bool is_identical_point(const Point_2 &p1, const Point_2 &p2);
+
 bool is_identical_segment(const Segment_2 &s1, const Segment_2 &s2);
 
 std::tuple<

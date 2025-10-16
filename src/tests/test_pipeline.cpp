@@ -268,9 +268,9 @@ bool run_WSO(std::string const output_dir, const TestCase &t_case,
 
   // Run WSO
   if (use_our_linear_validity_check) {
-    logger().info("linear_validity_check");
+    logger().info("linear_validity_check 1");
     linear_wso_check(mesh, camera, patch_triangulations);
-    logger().info("linear_validity_check done.");
+    logger().info("linear_validity_check 1 done.");
   }
 
   bool wso_adaptive = false;
@@ -350,9 +350,9 @@ bool run_WSO(std::string const output_dir, const TestCase &t_case,
       std::map<size_t, Mesh> patch_triangulations2;
 
       if (use_our_linear_validity_check) {
-        logger().info("linear_validity_check");
+        logger().info("linear_validity_check 2 ");
         linear_wso_check(mesh, camera, patch_triangulations2);
-        logger().info("linear_validity_check done.");
+        logger().info("linear_validity_check 2 done.");
       }
 
       triangulate_wso_patches(mesh, camera, patch_triangulations2, do_refine,

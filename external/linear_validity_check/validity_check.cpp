@@ -17,11 +17,10 @@ std::tuple <
   for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
     auto segment = it->curve();
     auto orientation_it = segment_orientation.find(segment);
-    
+
     if (orientation_it == segment_orientation.end()) {
-      // If segment not found, try the reverse direction
-      auto reverse_segment = Segment_2(segment.target(), segment.source());
-      orientation_it = segment_orientation.find(reverse_segment);
+      std::cerr << "Error: segment_orientation not found for segment: " << segment << std::endl;
+      throw std::runtime_error("Error: segment_orientation not found for segment");
     }
     
     if (orientation_it != segment_orientation.end()) {
@@ -32,7 +31,10 @@ std::tuple <
       auto right_face = it->twin()->face();
       
       // Determine if halfedge direction matches segment direction
-      bool directions_match = (it->source()->point() == segment.source() && it->target()->point() == segment.target());
+      using CGAL::compare_xy;
+      const bool src_eq = (compare_xy(it->source()->point(), segment.source()) == CGAL::EQUAL);
+      const bool dst_eq = (compare_xy(it->target()->point(), segment.target()) == CGAL::EQUAL);
+      bool directions_match = src_eq && dst_eq;
       
       Face_const_handle actual_left_face, actual_right_face;
       
@@ -189,10 +191,12 @@ check_qi_mismatch(const Arrangement_with_history_2 &arr,
       }
 
       std::vector<int> qi_values;
-      for (auto it = vertex->incident_halfedges(); it != vertex->incident_halfedges(); it++) {
+      auto it = vertex->incident_halfedges();
+      do {
         auto segment = it->curve();
         qi_values.push_back(qi.at(segment));
-      }
+        ++it;
+      } while (it != vertex->incident_halfedges());
 
       int qi_max = *std::max_element(qi_values.begin(), qi_values.end());
       int qi_min = *std::min_element(qi_values.begin(), qi_values.end());

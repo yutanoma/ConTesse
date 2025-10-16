@@ -14,9 +14,13 @@
 #endif
 
 namespace utils {
+bool is_identical_point(const Point_2 &p1, const Point_2 &p2) {
+  return CGAL::compare_xy(p1, p2) == CGAL::EQUAL;
+}
+
 bool is_identical_segment(const Segment_2 &s1, const Segment_2 &s2) {
-  return (s1.source() == s2.source() && s1.target() == s2.target()) ||
-          (s1.source() == s2.target() && s1.target() == s2.source());
+  return (is_identical_point(s1.source(), s2.source()) && is_identical_point(s1.target(), s2.target())) ||
+          (is_identical_point(s1.source(), s2.target()) && is_identical_point(s1.target(), s2.source()));
 }
   
 std::tuple<

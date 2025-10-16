@@ -107,170 +107,174 @@ std::map<Segment_2, bool, Segment2Comparator>
 segment_to_convex(const Arrangement_with_history_2 &arr,
                   const std::map<Segment_2, int, Segment2Comparator> &right_wn,
                   const std::map<Point_2, int> &point_to_node,
-                  const std::map<Segment_2, bool, Segment2Comparator> &is_cut,
+                  const std::map<Segment_2, int, Segment2Comparator> &segment_to_segment,
+                  const Eigen::MatrixXi &E_connectivity,
+                  const Eigen::VectorXi &E_is_cut,
                   const Eigen::VectorXi &V_is_cusp
 ) {
   // for each connected component, the segment that has the lowest winding
   // number on the right side face is convex
   // the convex/concave switches on the cusp vertices
-  std::map<Point_2, bool> point_is_cusp;
-  for (auto it = arr.vertices_begin(); it != arr.vertices_end(); it++) {
-    auto point = it->point();
-    if (point_to_node.find(point) == point_to_node.end()) {
-      point_is_cusp[point] = false;
+
+  // 1. for each segment, find the minimum winding number on the right side face
+  Eigen::VectorXi right_min_wn = Eigen::VectorXi::Constant(E_connectivity.rows(), std::numeric_limits<int>::max());
+  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
+    auto segment = it->curve();
+    auto right_face = right_wn.at(segment);
+
+    Segment_2 original_segment;
+    if (arr.number_of_originating_curves(it) == 0) {
+      original_segment = segment;
+    } else if (arr.number_of_originating_curves(it) == 1) {
+      original_segment = *arr.originating_curves_begin(it);
     } else {
-      auto node_id = point_to_node.at(point);
-      point_is_cusp[point] = V_is_cusp(node_id);
+      std::cerr << "Error: segment has " << arr.number_of_originating_curves(it) << " originating curves" << std::endl;
+      throw std::runtime_error("Error: segment has " + std::to_string(arr.number_of_originating_curves(it)) + " originating curves");
+    }
+
+    auto edge_id = segment_to_segment.at(original_segment);
+
+    if (right_min_wn(edge_id) > right_face) {
+      right_min_wn(edge_id) = right_face;
     }
   }
 
-  // first, group all the segments with its connectivity
-  std::vector<std::vector<Segment_2>> segments_group;
-  std::map<Segment_2, int, Segment2Comparator> segment_to_group;
-  std::queue<Halfedge_const_handle> q;
-  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
-    segment_to_group[it->curve()] = -1;
-    q.push(it);
+  // 2. divide the segments into patches
+  std::vector<std::vector<int>> vertex_to_edge(V_is_cusp.rows());
+  for (int i = 0; i < E_connectivity.rows(); i++) {
+    if (!E_is_cut(i)) {
+      vertex_to_edge[E_connectivity(i, 0)].push_back(i);
+      vertex_to_edge[E_connectivity(i, 1)].push_back(i);
+    }
   }
 
-  int added_segments = 0, total_segments = segment_to_group.size();
-  int group_idx = 0;
-  while (added_segments < total_segments) {
-    auto itr = q.front();
-    q.pop();
+  for (int i = 0; i < vertex_to_edge.size(); i++) {
+    if (vertex_to_edge[i].size() !=  0 && vertex_to_edge[i].size() != 2) {
+      std::cerr << "Error: vertex_to_edge[" << i << "] has "
+                << vertex_to_edge[i].size() << " edges" << std::endl;
+      std::cout << "This means that the loop is not a manifold" << std::endl;
+      throw std::runtime_error("Error: vertex_to_edge[" + std::to_string(i) + "] has " + std::to_string(vertex_to_edge[i].size()) + " edges");
+    }
+  }
 
-    if (segment_to_group.at(itr->curve()) != -1) {
+  std::vector<std::vector<int>> edge_groups;
+  Eigen::VectorXi edge_to_group = Eigen::VectorXi::Constant(E_connectivity.rows(), -1);
+  for (int i = 0; i < E_connectivity.rows(); i++) {
+    if (E_is_cut(i)) {
       continue;
     }
 
-    segments_group.emplace_back(std::vector<Segment_2>());
+    if (edge_to_group(i) != -1) {
+      continue;
+    }
 
-    auto current_itr = itr;
-    do {
-      auto segment = current_itr->curve();
+    if (vertex_to_edge[E_connectivity(i, 0)].size() < 2) {
+      continue;
+    }
 
-      if (segment_to_group.at(segment) == -1) {
-        segment_to_group[segment] = group_idx;
-        segments_group[group_idx].push_back(segment);
-        added_segments++;
-      } else {
+    int group_id = edge_groups.size();
+    std::vector<int> group;
+    int current_edge_id = i;
+
+    while (true) {
+      group.push_back(current_edge_id);
+      edge_to_group(current_edge_id) = group_id;
+
+      std::vector<int> next_edges;
+      for (int j = 0; j < 2; j++) {
+        auto vidx = E_connectivity(current_edge_id, j);
+        for (auto edge_id : vertex_to_edge[vidx]) {
+          if (edge_to_group(edge_id) == -1 && edge_id != current_edge_id) {
+            next_edges.push_back(edge_id);
+          }
+        }
+      }
+
+      if (next_edges.empty()) {
         break;
       }
 
-      // determine the next itr
-      auto next_pt = current_itr->target();
-
-      if (next_pt->degree() == 2) {
-        current_itr = current_itr->next();
-      } else if (next_pt->degree() == 3) {
-        // choose the halfedge that is (1) not this itr and (2) not a cut
-        auto halfedge = next_pt->incident_halfedges();
-        do {
-          if (is_cut.at(halfedge->curve())) {
-            halfedge++;
-            continue;
-          }
-          if (halfedge == current_itr) {
-            halfedge++;
-            continue;
-          }
-
-          current_itr = halfedge;
-          break;
-        } while (halfedge != next_pt->incident_halfedges());
-      } else if (next_pt->degree() == 4) {
-        // choose the halfedge that has the same source segment as the current itr
-        auto halfedge = next_pt->incident_halfedges();
-        do {
-          if (is_cut.at(halfedge->curve())) {
-            halfedge++;
-            continue;
-          }
-          if (halfedge == current_itr) {
-            halfedge++;
-            continue;
-          }
-          if (arr.number_of_originating_curves(halfedge) != 1) {
-            halfedge++;
-            continue;
-          }
-          auto original_segment = *arr.originating_curves_begin(halfedge);
-          auto original_segment_source =
-              *arr.originating_curves_begin(current_itr);
-          if (is_identical_segment(original_segment, original_segment_source)) {
-            current_itr = halfedge;
-            break;
-          } else {
-            halfedge++;
-            continue;
-          }
-        } while (halfedge != next_pt->incident_halfedges());
-      }
-    } while (current_itr != itr);
-
-    group_idx++;
-  }
-
-  // second, for each connected component, find the segment that has the lowest
-  // winding number on the right side face
-  std::map<Segment_2, bool, Segment2Comparator> segment_is_convex;
-  std::map<Segment_2, bool, Segment2Comparator> segment_labeled;
-  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
-    segment_labeled[it->curve()] = false;
-  }
-
-  for (int i = 0; i < segments_group.size(); i++) {
-    int min_wn = std::numeric_limits<int>::max();
-    Segment_2 min_wn_segment;
-    for (int j = 0; j < segments_group[i].size(); j++) {
-      auto right_side_wn = right_wn.at(segments_group[i][j]);
-
-      if (right_side_wn < min_wn) {
-        min_wn = right_side_wn;
-        min_wn_segment = segments_group[i][j];
-      }
+      current_edge_id = next_edges[0];
     }
 
-    segment_labeled[min_wn_segment] = true;
-    segment_is_convex[min_wn_segment] = true;
+    edge_groups.push_back(group);
   }
 
-  // finally, label the segment as convex or concave
-  for (int i = 0; i < segments_group.size(); i++) {
-    for (int j = 0; j < 2 * segments_group[i].size(); j++) {
-      auto prev_idx = (j + segments_group[i].size() - 1) % segments_group[i].size();
-      auto curr_idx = j % segments_group[i].size();
+  // 3. for each group, find the minimum winding number
+  std::vector<int> group_min_wn_edge(edge_groups.size(), -1);
+  for (int i = 0; i < edge_groups.size(); i++) {
+    int min_wn = std::numeric_limits<int>::max();
+    for (auto edge_id : edge_groups[i]) {
+      if (right_min_wn(edge_id) < min_wn) {
+        min_wn = right_min_wn(edge_id);
+        group_min_wn_edge[i] = edge_id;
+      }
+    }
+  }
 
-      if (!segment_labeled[segments_group[i][prev_idx]]) {
+  // 4. for each group, flip the convex/concave labeling
+  Eigen::VectorXi segment_is_convex = Eigen::VectorXi::Constant(E_connectivity.rows(), -1);
+  for (int i = 0; i < edge_groups.size(); i++) {
+    int edge_id = group_min_wn_edge[i];
+    segment_is_convex(edge_id) = 1;
+  }
+
+  for (int i = 0; i < edge_groups.size(); i++) {
+    for (int j = 0; j < 2 * edge_groups[i].size(); j++) {
+      int edge_id = edge_groups[i][j % edge_groups[i].size()];
+      int next_edge_id = edge_groups[i][(j + 1) % edge_groups[i].size()];
+
+      int shared_vertex = -1;
+      for (int k = 0; k < 2 && shared_vertex == -1; k++) {
+        for (int l = 0; l < 2; l++) {
+          if (E_connectivity(edge_id, k) == E_connectivity(next_edge_id, l)) {
+            shared_vertex = E_connectivity(edge_id, k);
+            break;
+          }
+        }
+      }
+
+      if (shared_vertex == -1) {
+        std::cerr << "Error: shared vertex not found" << std::endl;
+        std::cout << "edge_id: " << edge_id << std::endl;
+        std::cout << "next_edge_id: " << next_edge_id << std::endl;
+        std::cout << "E_connectivity(edge_id, 0): " << E_connectivity(edge_id, 0) << std::endl;
+        std::cout << "E_connectivity(edge_id, 1): " << E_connectivity(edge_id, 1) << std::endl;
+        std::cout << "E_connectivity(next_edge_id, 0): " << E_connectivity(next_edge_id, 0) << std::endl;
+        std::cout << "E_connectivity(next_edge_id, 1): " << E_connectivity(next_edge_id, 1) << std::endl;
+        throw std::runtime_error("Error: shared vertex not found");
+      }
+
+      if (segment_is_convex(edge_id) == -1) {
         continue;
       }
 
-      segment_labeled[segments_group[i][curr_idx]] = true;
+      int prev_label = segment_is_convex(edge_id);
+      int next_label = V_is_cusp(shared_vertex) ? !prev_label : prev_label;
 
-      // get the common point
-      Point_2 common_point = segments_group[i][prev_idx].source() ==
-                                     segments_group[i][curr_idx].source()
-                                 ? segments_group[i][prev_idx].source()
-                             : segments_group[i][prev_idx].target() ==
-                                     segments_group[i][curr_idx].target()
-                                 ? segments_group[i][prev_idx].target()
-                             : segments_group[i][prev_idx].source() ==
-                                     segments_group[i][curr_idx].target()
-                                 ? segments_group[i][prev_idx].source()
-                             : segments_group[i][prev_idx].target() ==
-                                     segments_group[i][curr_idx].source()
-                                 ? segments_group[i][prev_idx].target()
-                                 : segments_group[i][curr_idx].source();
-
-      if (point_is_cusp.at(common_point)) {
-        segment_is_convex[segments_group[i][curr_idx]] = !segment_is_convex[segments_group[i][prev_idx]];
-      } else {
-        segment_is_convex[segments_group[i][curr_idx]] = segment_is_convex[segments_group[i][prev_idx]];
-      }
+      segment_is_convex(next_edge_id) = next_label;
     }
   }
 
-  return segment_is_convex;
+  // 5. return the result
+  std::map<Segment_2, bool, Segment2Comparator> segment_is_convex_result;
+  for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
+    Segment_2 segment = it->curve();
+    Segment_2 original_segment;
+
+    if (arr.number_of_originating_curves(it) == 0) {
+      original_segment = segment;
+    } else if (arr.number_of_originating_curves(it) == 1) {
+      original_segment = *arr.originating_curves_begin(it);
+    } else {
+      std::cerr << "Error: segment has " << arr.number_of_originating_curves(it) << " originating curves" << std::endl;
+      throw std::runtime_error("Error: segment has " + std::to_string(arr.number_of_originating_curves(it)) + " originating curves");
+    }
+
+    segment_is_convex_result[segment] = segment_is_convex(segment_to_segment.at(original_segment));
+  }
+
+  return segment_is_convex_result;
 }
 
 std::map<Point_2, bool> point_to_singularity(
@@ -294,15 +298,15 @@ std::map<Point_2, bool> point_to_singularity(
   return point_is_singularity;
 }
 
-std::tuple<std::map<Point_2, Segment_2>, std::map<Point_2, Segment_2>>
+std::tuple<std::map<Point_2, std::vector<Segment_2>>, std::map<Point_2, std::vector<Segment_2>>>
 segment_to_casing_edges(
     const Arrangement_with_history_2 &arr,
     const std::map<Point_2, int> &point_to_node,
     const Eigen::MatrixXd &V_3d, const Eigen::VectorXi &V_is_cusp,
     const Eigen::Vector3d &camera_pos
 ) {
-  std::map<Point_2, Segment_2> upper_casing_edges;
-  std::map<Point_2, Segment_2> lower_casing_edges;
+  std::map<Point_2, std::vector<Segment_2>> upper_casing_edges;
+  std::map<Point_2, std::vector<Segment_2>> lower_casing_edges;
 
   for (auto it = arr.vertices_begin(); it != arr.vertices_end(); it++) {
     if (it->degree() != 4) {
@@ -331,8 +335,70 @@ segment_to_casing_edges(
       ++heit;
     } while (heit != it->incident_halfedges());
 
+    // handle degenerate cases
     if (original_to_new_segments.size() != 2) {
+      // group it with the segments that are connected
+      std::map<Segment_2, bool, Segment2Comparator> segment_is_grouped;
+      std::map<Segment_2, std::vector<Segment_2>, Segment2Comparator> _original_to_new_segments;
+      for (auto it0 : original_to_new_segments) {
+        for (auto it1 : original_to_new_segments) {
+          if (segment_is_grouped.find(it0.first) != segment_is_grouped.end() ||
+              segment_is_grouped.find(it1.first) != segment_is_grouped.end()
+          ) {
+            continue;
+          }
+
+          if (is_identical_segment(it0.first, it1.first)) {
+            continue;
+          }
+
+          auto segment_0 = it0.first;
+          auto segment_1 = it1.first;
+
+          if (segment_0.source() == segment_1.source() ||
+              segment_0.source() == segment_1.target() ||
+              segment_0.target() == segment_1.source() ||
+              segment_0.target() == segment_1.target()) {
+            auto segments_0 = it0.second;
+            auto segments_1 = it1.second;
+
+            segment_is_grouped[segment_0] = true;
+            segment_is_grouped[segment_1] = true;
+
+            _original_to_new_segments[segment_0].insert(
+                _original_to_new_segments[segment_0].end(), segments_0.begin(),
+                segments_0.end());
+            _original_to_new_segments[segment_0].insert(
+                _original_to_new_segments[segment_0].end(), segments_1.begin(),
+                segments_1.end());
+
+            break;
+          }
+        }
+
+        if (segment_is_grouped.find(it0.first) == segment_is_grouped.end()) {
+          _original_to_new_segments[it0.first] = it0.second;
+          segment_is_grouped[it0.first] = true;
+        }
+      }
+
+      original_to_new_segments = _original_to_new_segments;
+    }
+
+    if (
+      original_to_new_segments.size() != 2 ||
+      original_to_new_segments.begin()->second.size() != 2 ||
+      (original_to_new_segments.begin()++)->second.size() != 2
+    ) {
       std::cerr << "Error: original_to_new_segments.size() != 2" << std::endl;
+      std::cerr << "original_to_new_segments.size(): " << original_to_new_segments.size() << std::endl;
+      for (auto it : original_to_new_segments) {
+        std::cout << "original_segment: " << it.first << std::endl;
+        for (auto s : it.second) {
+          std::cout << "   this_segment: " << s << std::endl;
+        }
+        std::cout << std::endl;
+      }
       throw std::runtime_error("Error: original_to_new_segments.size() != 2");
     }
 
@@ -386,8 +452,8 @@ segment_to_casing_edges(
       lower_segment = original_segment_1;
     }
 
-    upper_casing_edges[point] = upper_segment;
-    lower_casing_edges[point] = lower_segment;
+    upper_casing_edges[point] = original_to_new_segments[upper_segment];
+    lower_casing_edges[point] = original_to_new_segments[lower_segment];
   }
 
   return {upper_casing_edges, lower_casing_edges};
@@ -446,7 +512,8 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
 
   std::cout << "getting segment is convex" << std::endl;
   auto segment_is_convex = segment_to_convex(arr, right_wn, point_to_node,
-                                             segment_is_cut, V_is_cusp);
+                                             segment_to_segment, E_connectivity,
+                                             E_is_cut, V_is_cusp);
   std::cout << "got segment is convex" << std::endl;
 
   // 3. check the validity

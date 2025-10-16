@@ -15,13 +15,3 @@ void triangulate_wso_patches(
     std::map<size_t, Mesh> &patch_triangulations, bool do_refine = false,
     std::unordered_set<int> selected_patches = std::unordered_set<int>(),
     bool ff_only = false);
-
-void triangulate_wso_patches_adaptive(
-    Mesh &mesh, Camera const &camera,
-    std::map<size_t, Mesh> &patch_triangulations, bool do_refine = false,
-    std::unordered_set<int> selected_patches = std::unordered_set<int>());
-
-void triangulate_wso_patches_simplified(
-    Mesh &mesh, Camera const &camera,
-    std::map<size_t, Mesh> &patch_triangulations, bool do_refine = false,
-    std::unordered_set<int> selected_patches = std::unordered_set<int>());

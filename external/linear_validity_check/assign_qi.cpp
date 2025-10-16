@@ -122,8 +122,8 @@ void assign_lowest_wn_qi(
 std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
     const Arrangement_with_history_2 &arr,
     const std::map<Segment_2, int, Segment2Comparator> &qi,
-    const std::map<Point_2, Segment_2> &upper_casing_edges,
-    const std::map<Point_2, Segment_2> &lower_casing_edges,
+    const std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
+    const std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
     const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
     const std::map<Segment_2, bool, Segment2Comparator> &is_cut,
     Vertex_const_iterator &vertex
@@ -135,30 +135,14 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
 
     auto vertex_point = vertex->point();
 
-    std::vector<Segment_2> upper_new_edges, lower_new_edges;
+    if (upper_casing_edges.find(vertex_point) == upper_casing_edges.end() ||
+        lower_casing_edges.find(vertex_point) == lower_casing_edges.end()) {
+        std::cerr << "Error: upper_casing_edges or lower_casing_edges not found for vertex: " << vertex_point << std::endl;
+        throw std::runtime_error("Error: upper_casing_edges or lower_casing_edges not found for vertex");
+    }
 
-    auto it = vertex->incident_halfedges();
-    do {
-        auto segment_new = it->curve();
-        
-        // this must have an old edge
-        if (arr.number_of_originating_curves(it) != 1) {
-            std::cerr << "Error: it has " << arr.number_of_originating_curves(it)
-                      << " originating curves" << std::endl;
-            throw std::runtime_error("Error: it has " + std::to_string(arr.number_of_originating_curves(it)) + " originating curves");
-        }
-
-        auto ocit = arr.originating_curves_begin(it);
-        Segment_2 segment = *ocit;
-
-        if (is_identical_segment(segment, upper_casing_edges.at(vertex->point()))) {
-            upper_new_edges.push_back(it->curve());
-        } else if (is_identical_segment(segment, lower_casing_edges.at(vertex->point()))) {
-            lower_new_edges.push_back(it->curve());
-        }
-
-        ++it;
-    } while (it != vertex->incident_halfedges());
+    std::vector<Segment_2> upper_new_edges = upper_casing_edges.at(vertex_point);
+    std::vector<Segment_2> lower_new_edges = lower_casing_edges.at(vertex_point);
 
     if (upper_new_edges.size() != 2 || lower_new_edges.size() != 2) {
         std::cerr << "Error: upper_new_edges.size(): " << upper_new_edges.size()
@@ -173,63 +157,39 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
     Segment_2 lower_2_new = lower_new_edges[1];
 
     bool is_upper_1_positive = segment_orientation.at(upper_1_new) == 1;
-    bool is_upper_2_positive = segment_orientation.at(upper_2_new) == 1;
-    bool is_lower_1_positive = segment_orientation.at(lower_1_new) == 1;
-    bool is_lower_2_positive = segment_orientation.at(lower_2_new) == 1;
+    
+    // Given the vector upper_1, check if lower_1 and lower_2 are on the right and left sides of the vector
+    Eigen::Vector2d upper_vec;
 
-    bool upper_1_prev_crossing = is_upper_1_positive ? upper_1_new.source() == vertex_point : upper_1_new.target() == vertex_point;
-    bool upper_2_prev_crossing = is_upper_2_positive ? upper_2_new.source() == vertex_point : upper_2_new.target() == vertex_point;
-    bool lower_1_prev_crossing = is_lower_1_positive ? lower_1_new.source() == vertex_point : lower_1_new.target() == vertex_point;
-    bool lower_2_prev_crossing = is_lower_2_positive
-                                     ? lower_2_new.source() == vertex_point
-                                     : lower_2_new.target() == vertex_point;
-
-    if ((upper_1_prev_crossing && upper_2_prev_crossing) || (!upper_1_prev_crossing && !upper_2_prev_crossing)) {
-      std::cerr << "Error: upper_1_prev_crossing and upper_2_prev_crossing are "
-                   "both true or both false"
-                << std::endl;
-      std::cerr << "upper_1_prev_crossing: " << upper_1_prev_crossing << ", upper_2_prev_crossing: " << upper_2_prev_crossing << std::endl;
-      throw std::runtime_error("Error: upper_1_prev_crossing and upper_2_prev_crossing are both true");
-    }
-    if ((lower_1_prev_crossing && lower_2_prev_crossing) || (!lower_1_prev_crossing && !lower_2_prev_crossing)) {
-      std::cerr << "Error: lower_1_prev_crossing and lower_2_prev_crossing are "
-                   "both true or both false"
-                << std::endl;
-      std::cerr << "lower_1_prev_crossing: " << lower_1_prev_crossing << ", lower_2_prev_crossing: " << lower_2_prev_crossing << std::endl;
-      throw std::runtime_error("Error: lower_1_prev_crossing and lower_2_prev_crossing are both true");
+    if (is_upper_1_positive) {
+      upper_vec = Eigen::Vector2d(
+        CGAL::to_double(upper_1_new.target().x() - upper_1_new.source().x()),
+        CGAL::to_double(upper_1_new.target().y() - upper_1_new.source().y())
+      );
+    } else {
+      upper_vec = Eigen::Vector2d(
+        CGAL::to_double(upper_1_new.source().x() - upper_1_new.target().x()),
+        CGAL::to_double(upper_1_new.source().y() - upper_1_new.target().y())
+      );
     }
 
-    Segment_2 upper_prev_edge = upper_1_prev_crossing ? upper_2_new : upper_1_new;
-    Segment_2 upper_next_edge = upper_1_prev_crossing ? upper_1_new : upper_2_new;
-    Segment_2 lower_prev_edge = lower_1_prev_crossing ? lower_2_new : lower_1_new;
-    Segment_2 lower_next_edge = lower_1_prev_crossing ? lower_1_new : lower_2_new;
+    // a vector from vertex to lower_1/lower_2
+    Point_2 lower_1_pt = is_identical_point(lower_1_new.source(), vertex_point) ? lower_1_new.target() : lower_1_new.source();
+    Point_2 lower_2_pt = is_identical_point(lower_2_new.source(), vertex_point) ? lower_2_new.target() : lower_2_new.source();
 
-    // these are the points that are adjacent to the vertex in question
-    Point_2 upper_prev_pt = upper_prev_edge.source() == vertex_point ? upper_prev_edge.target() : upper_prev_edge.source();
-    Point_2 upper_next_pt = upper_next_edge.source() == vertex_point ? upper_next_edge.target() : upper_next_edge.source();
-    Point_2 lower_prev_pt = lower_prev_edge.source() == vertex_point ? lower_prev_edge.target() : lower_prev_edge.source();
-    Point_2 lower_next_pt = lower_next_edge.source() == vertex_point ? lower_next_edge.target() : lower_next_edge.source();
-
-    // Given the vector from upper_prev to upper_next,
-    // the one on the right side of the vector is the right side of upper_1 and upper_2
-    Eigen::Vector2d upper_vec(
-        CGAL::to_double(upper_next_pt.x() - upper_prev_pt.x()), 
-        CGAL::to_double(upper_next_pt.y() - upper_prev_pt.y())
+    Eigen::Vector2d lower_1_vec(
+        CGAL::to_double(lower_1_pt.x() - vertex_point.x()), 
+        CGAL::to_double(lower_1_pt.y() - vertex_point.y())
     );
-
-    // a vector from vertex to lower_prev
-    Eigen::Vector2d lower_prev_vec(
-        CGAL::to_double(lower_prev_pt.x() - vertex_point.x()), 
-        CGAL::to_double(lower_prev_pt.y() - vertex_point.y())
-    );
-    Eigen::Vector2d lower_next_vec(
-        CGAL::to_double(lower_next_pt.x() - vertex_point.x()), 
-        CGAL::to_double(lower_next_pt.y() - vertex_point.y())
+    Eigen::Vector2d lower_2_vec(
+        CGAL::to_double(lower_2_pt.x() - vertex_point.x()), 
+        CGAL::to_double(lower_2_pt.y() - vertex_point.y())
     );
 
     // Compute 2D cross product (z-component of 3D cross product)
-    double cross_1 = upper_vec.x() * lower_prev_vec.y() - upper_vec.y() * lower_prev_vec.x();
-    double cross_2 = upper_vec.x() * lower_next_vec.y() - upper_vec.y() * lower_next_vec.x();
+    // if this is positive, then lower is on the left side of the vector
+    double cross_1 = upper_vec.x() * lower_1_vec.y() - upper_vec.y() * lower_1_vec.x();
+    double cross_2 = upper_vec.x() * lower_2_vec.y() - upper_vec.y() * lower_2_vec.x();
 
     Segment_2 lower_occluded, lower_visible;
 
@@ -244,7 +204,11 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
         lower_occluded = lower_1_new;
         lower_visible = lower_2_new;
     } else {
-        std::cout << "cross_1: " << cross_1 << ", cross_2: " << cross_2 << std::endl;
+      std::cout << "  cross_1: " << cross_1 << ", cross_2: " << cross_2
+                << std::endl;
+      std::cout << "  upper_vec: " << upper_vec.transpose() << std::endl;
+      std::cout << "  lower_1_vec: " << lower_1_vec.transpose() << std::endl;
+      std::cout << "  lower_2_vec: " << lower_2_vec.transpose() << std::endl;
         throw std::runtime_error("Error: both are on the same side");
     }
 
@@ -361,16 +325,7 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_singularity(
     auto it = vertex->incident_halfedges();
     do {
         // we must use the originating segments for querying segment_is_convex
-        
-        if (arr.number_of_originating_curves(it) != 1) {
-            std::cerr << "Error: it has " << arr.number_of_originating_curves(it)
-                      << " originating curves" << std::endl;
-            throw std::runtime_error("Error: it has " + std::to_string(arr.number_of_originating_curves(it)) + " originating curves");
-        }
-
-        auto ocit = arr.originating_curves_begin(it);
-
-        Segment_2 segment = *ocit;
+        auto segment = it->curve();
 
         if (segment_is_convex.at(segment)) {
             visible = it->curve();
@@ -407,8 +362,8 @@ void propagate_qi(
     const std::map<Point_2, bool> &point_is_singularity,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
-    const std::map<Point_2, Segment_2> &upper_casing_edges,
-    const std::map<Point_2, Segment_2> &lower_casing_edges,
+    const std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
+    const std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
     const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
     std::map<Segment_2, int, Segment2Comparator> &qi
 ) {
@@ -499,7 +454,7 @@ void propagate_qi(
                 ++it;
             } while (it != current_vertex->incident_halfedges());
 
-            auto next_v = current_vertex->point() == current_segment.source() ? current_segment.target() : current_segment.source();
+            auto next_v = is_identical_point(current_vertex->point(), current_segment.source()) ? current_segment.target() : current_segment.source();
             current_vertex = point_to_vertex[next_v];
 
             qi[current_segment] = current_qi;
@@ -555,14 +510,14 @@ void propagate_qi(
 std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point_2>> validity_check(
     Arrangement_with_history_2 &arr,
     std::map<Point_2, bool> &point_is_singularity,
-    // convex/concave labeling per segment. This is based on the "old" segments on the planar map
+    // convex/concave labeling per segment. This is based on the "new" segments on the planar map
     std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
     // the segment is a cut on the triangulation
     std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
-    // given an intersection point, which "old" edges are the upper and lower casing edges?
-    std::map<Point_2, Segment_2> &upper_casing_edges,
-    std::map<Point_2, Segment_2> &lower_casing_edges,
-    // given a segment, does segment.source() -> segment.target() matches the canonical orientation?
+    // given an intersection point, which "new" edges are the upper and lower casing edges?
+    std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
+    std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
+    // given a "new" segment, does segment.source() -> segment.target() matches the canonical orientation?
     std::map<Segment_2, int, Segment2Comparator> &segment_orientation
 ) {
     // store the propagated qi
@@ -590,7 +545,11 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     std::map<Segment_2, bool, Segment2Comparator> is_segment_invalid;
     for (auto it = arr.edges_begin(); it != arr.edges_end(); it++) {
         Segment_2 segment = it->curve();
-        is_segment_invalid[segment] = false;
+        if (segment_is_cut.at(segment)) {
+          is_segment_invalid[segment] = true;
+        } else {
+          is_segment_invalid[segment] = false;
+        }
     }
 
     auto [is_valid, qi_mismatch_positions] = check_qi_mismatch(arr, segment_orientation, qi, is_segment_invalid);
