@@ -199,10 +199,8 @@ unify_simplified_meshes(
     gv2new.reserve(static_cast<size_t>(m) * 3);
 
     // For output
-    std::vector<Eigen::Vector2d> Vnew_vec;
-    Vnew_vec.reserve(static_cast<size_t>(m) * 3); // upper bound
+    std::vector<int> Vnew_to_orig;
     Eigen::MatrixXi Fnew(m, 3);
-    Eigen::VectorXi orig2rep = Eigen::VectorXi::Constant(n, -1);
 
     auto ensure_new = [&](int g, int v)->int {
         assert(g >= 0 && "group_id must be non-negative");
@@ -211,10 +209,9 @@ unify_simplified_meshes(
         auto it = gv2new.find(key);
         if (it != gv2new.end()) return it->second;
 
-        const int new_id = static_cast<int>(Vnew_vec.size());
+        const int new_id = static_cast<int>(Vnew_to_orig.size());
         gv2new.emplace(key, new_id);
-        Vnew_vec.emplace_back(V(v,0), V(v,1));
-        if (orig2rep(v) == -1) orig2rep(v) = new_id; // store first representative
+        Vnew_to_orig.push_back(v);
         return new_id;
     };
 
@@ -234,21 +231,16 @@ unify_simplified_meshes(
     }
 
     // Finalize V'
-    Eigen::MatrixXd Vnew(static_cast<int>(Vnew_vec.size()), 2);
-    for (int i = 0; i < static_cast<int>(Vnew_vec.size()); ++i) {
-        Vnew(i,0) = Vnew_vec[i](0);
-        Vnew(i,1) = Vnew_vec[i](1);
+    Eigen::MatrixXd Vnew(static_cast<int>(Vnew_to_orig.size()), 2);
+    for (int i = 0; i < static_cast<int>(Vnew_to_orig.size()); ++i) {
+        Vnew(i,0) = V(Vnew_to_orig[i], 0);
+        Vnew(i,1) = V(Vnew_to_orig[i], 1);
     }
 
-    Eigen::VectorXi Vnew_to_orig = Eigen::VectorXi::Constant(Vnew.rows(), -1);
-    for (int i = 0; i < orig2rep.rows(); i++) {
-      int new_id = orig2rep(i);
-      if (new_id != -1) {
-        Vnew_to_orig(new_id) = i;
-      }
-    }
+    Eigen::VectorXi Vnew_to_orig_vec =
+        Eigen::Map<Eigen::VectorXi>(Vnew_to_orig.data(), Vnew_to_orig.size());
 
-    return {Vnew, Fnew, Vnew_to_orig};
+    return {Vnew, Fnew, Vnew_to_orig_vec};
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::VectorXi>
