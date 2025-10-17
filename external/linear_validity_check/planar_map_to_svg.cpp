@@ -27,11 +27,6 @@ static std::string color_for_qi(int q) {
     return palette[idx];
 }
 
-static bool same_segment(const Segment_2 &a, const Segment_2 &b) {
-    return (a.source() == b.source() && a.target() == b.target()) ||
-           (a.source() == b.target() && a.target() == b.source());
-}
-
 template <typename T>
 static bool map_lookup_segment_bi_oriented(
     const std::map<Segment_2, T, Segment2Comparator> &m,
@@ -116,51 +111,6 @@ static bool is_break_vertex(
     return singular || (deg > 2);
 }
 
-static bool halfedge_has_single_origin(const Arrangement_with_history_2 &arr,
-                                       const Arrangement_with_history_2::Halfedge_const_handle &heh,
-                                       Segment_2 &origin_seg) {
-    if (arr.number_of_originating_curves(heh) != 1) return false;
-    auto ocit = arr.originating_curves_begin(heh);
-    origin_seg = *ocit;
-    return true;
-}
-
-static bool same_origin_segment(const Segment_2 &a, const Segment_2 &b) {
-    return same_segment(a, b);
-}
-
-static bool is_start_halfedge(
-    const Arrangement_with_history_2 &arr,
-    const Arrangement_with_history_2::Halfedge_const_handle &heh,
-    const Segment_2 &origin_seg,
-    const std::map<Point_2, bool> &point_is_singularity
-) {
-    auto src = heh->source();
-    if (is_break_vertex(src, point_is_singularity)) return true;
-
-    auto first = src->incident_halfedges();
-    if (first == nullptr) return true;
-    auto curr = first;
-    do {
-        auto h = curr;
-        if (h == heh->twin()) {
-            ++curr;
-            continue;
-        }
-        if (h->target() == src) {
-            Segment_2 s2;
-            if (halfedge_has_single_origin(arr, h, s2)) {
-                if (same_origin_segment(s2, origin_seg)) {
-                    return false;
-                }
-            }
-        }
-        ++curr;
-    } while (curr != first);
-
-    return true;
-}
-
 struct Chain {
     std::vector<Point_2> pts;
     int qi;
@@ -177,7 +127,7 @@ std::vector<Chain> get_chains(
     std::map<Segment_2, int, Segment2Comparator> chain_id;
 
     for (auto hei = arr.halfedges_begin(); hei != arr.halfedges_end(); ++hei) {
-        auto segment = hei->curve();
+      auto segment = hei->curve();
 
         if (chain_id.find(segment) != chain_id.end()) {
             continue;
@@ -185,14 +135,7 @@ std::vector<Chain> get_chains(
 
         Chain chain;
         chain.qi = qi.at(segment);
-
-        Segment_2 origin_seg = segment;
-        if (arr.number_of_originating_curves(hei) > 0) {
-            auto ocit = arr.originating_curves_begin(hei);
-            origin_seg = *ocit;
-        }
-
-        chain.convex = segment_is_convex.at(origin_seg);
+        chain.convex = segment_is_convex.at(segment);
 
         // traverse the chain
         std::queue<Arrangement_with_history_2::Halfedge_const_handle> queue;
@@ -271,7 +214,7 @@ std::vector<Chain> get_chains(
         pts_visited[start_pt] = true;
 
         Segment_2 current_seg = pts_to_segments[start_pt][0];
-        Point_2 current_pt = current_seg.target() == start_pt ? current_seg.source() : current_seg.target();
+        Point_2 current_pt = is_identical_point(current_seg.target(), start_pt) ? current_seg.source() : current_seg.target();
 
         while (true) {
             chain.pts.push_back(current_pt);
@@ -283,8 +226,8 @@ std::vector<Chain> get_chains(
                 break;
             }
 
-            current_seg = same_segment(current_seg, segments[0]) ? segments[1] : segments[0];
-            current_pt = current_seg.target() == current_pt ? current_seg.source() : current_seg.target();
+            current_seg = is_identical_segment(current_seg, segments[0]) ? segments[1] : segments[0];
+            current_pt = is_identical_point(current_seg.target(), current_pt) ? current_seg.source() : current_seg.target();
 
             if (pts_visited.find(current_pt) != pts_visited.end()) {
                 // std::cout << "Breaking at point due to loop: " << current_pt << std::endl;
@@ -293,8 +236,6 @@ std::vector<Chain> get_chains(
                 break;
             }
         }
-
-        // std::cout << "Chain points: " << chain.pts.size() << std::endl;
 
         if (chain.pts.size() != pts_in_chain.size() && chain.pts.size() != pts_in_chain.size() + 1) {
             std::cout << "Chain points: " << chain.pts.size() << " Pts in chain: " << pts_in_chain.size() << std::endl;
