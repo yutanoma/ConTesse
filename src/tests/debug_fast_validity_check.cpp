@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <filesystem>
 
 #include "linear_validity_check/fast_validity_check.h"
 
@@ -88,6 +89,43 @@ VectorType readVectorFromFile(const std::string& filename) {
     return vector;
 }
 
+// Function to extract ID from debug directory path
+std::string extractIdFromPath(const std::string& debug_dir) {
+    std::filesystem::path path(debug_dir);
+    std::string dir_name = path.filename().string();
+    
+    // Remove trailing slash if present
+    if (!dir_name.empty() && dir_name.back() == '/') {
+        dir_name.pop_back();
+    }
+    
+    return dir_name;
+}
+
+// Function to export mesh as OBJ file
+void exportMeshAsObj(const Eigen::MatrixXd& V, const Eigen::MatrixXi& F, const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not create file: " + filename);
+    }
+    
+    // Write vertices
+    for (int i = 0; i < V.rows(); i++) {
+        file << "v " << V(i, 0) << " " << V(i, 1) << " " << 0.000 << std::endl;
+    }
+    
+    // Write faces (OBJ uses 1-based indexing)
+    for (int i = 0; i < F.rows(); i++) {
+        file << "f";
+        for (int j = 0; j < F.cols(); j++) {
+            file << " " << (F(i, j) + 1); // Convert to 1-based indexing
+        }
+        file << std::endl;
+    }
+    
+    file.close();
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <debug_inputs_directory>" << std::endl;
@@ -125,10 +163,37 @@ int main(int argc, char* argv[]) {
         // Call the fast_validity_check function
         auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
             vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
-            vertex_is_cusp, vertex_is_singularity, camera_pos);
+            vertex_is_cusp, vertex_is_singularity, camera_pos, true);
 
         std::cout << "fast_validity_check completed!" << std::endl;
-        std::cout << "Result: " << (is_wso_succeeded ? "SUCCESS" : "FAILED") << std::endl;
+        std::cout << "Result: " << (is_wso_succeeded ? "SUCCESS" : "FAILED")
+                  << std::endl;
+
+        // export the mesh
+        std::string id = extractIdFromPath(debug_dir);
+        std::string output_dir = "./debug_output/" + id;
+        
+        // Create output directory if it doesn't exist
+        std::filesystem::create_directories(output_dir);
+        
+        if (is_wso_succeeded) {
+            // Export mesh as OBJ file
+            std::string mesh_filename = output_dir + "/mesh.obj";
+            exportMeshAsObj(V_out, F_out, mesh_filename);
+            std::cout << "Mesh exported to: " << mesh_filename << std::endl;
+        }
+        
+        // Move SVG file if it exists
+        std::string svg_source = "./.tmp_debug/validity_check.svg";
+        std::string svg_dest = output_dir + "/validity_check.svg";
+        
+        if (std::filesystem::exists(svg_source)) {
+            std::filesystem::rename(svg_source, svg_dest);
+            std::cout << "SVG file moved to: " << svg_dest << std::endl;
+        } else {
+            std::cout << "Warning: SVG file not found at " << svg_source << std::endl;
+        }
+        
         
         if (is_wso_succeeded) {
             std::cout << "  V_out: " << V_out.rows() << "x" << V_out.cols() << std::endl;

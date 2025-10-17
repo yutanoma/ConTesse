@@ -4,7 +4,7 @@
 #include "assign_qi.h"
 #include "validity_check.h"
 #include "triangulate_valid_contour.h"
-
+#include "planar_map_to_svg.h"
 namespace utils {
 std::map<Segment_2, int, Segment2Comparator> segment_to_orientation(
     const Arrangement_with_history_2 &arr,
@@ -466,7 +466,8 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
                     const Eigen::VectorXi &E_is_cut,
                     const Eigen::VectorXi &V_is_cusp,
                     const Eigen::VectorXi &V_is_singularity,
-                    const Eigen::Vector3d &camera_pos) {
+                    const Eigen::Vector3d &camera_pos,
+                    bool is_debug) {
   // 1. create the planar map
   // point_to_node is the map from the *original* vertices to the new vertices
   // i.e., does not include any intersection points
@@ -522,6 +523,19 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
       arr, point_is_singularity, segment_is_convex, segment_is_cut, upper_casing_edges,
       lower_casing_edges, segment_orientation);
   std::cout << "checked validity" << std::endl;
+
+  if (is_debug) {
+    // export the svg
+    std::string svg_path = "./.tmp_debug/validity_check.svg";
+
+    std::filesystem::create_directories("./.tmp_debug");
+
+    auto svg = planar_map_to_svg(arr, qi, segment_is_convex,
+                                 point_is_singularity, qi_mismatch_positions);
+    std::ofstream svg_file(svg_path);
+    svg_file << svg;
+    svg_file.close();
+  }
 
   if (!is_valid) {
     return {false, Eigen::MatrixXd(), Eigen::MatrixXi(), Eigen::VectorXi()};
