@@ -467,6 +467,7 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
                     const Eigen::VectorXi &V_is_cusp,
                     const Eigen::VectorXi &V_is_singularity,
                     const Eigen::Vector3d &camera_pos,
+                    bool is_back_facing,
                     bool is_debug) {
   // 1. create the planar map
   // point_to_node is the map from the *original* vertices to the new vertices
@@ -521,7 +522,7 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
   std::cout << "checking validity" << std::endl;
   auto [is_valid, qi, qi_mismatch_positions] = validity_check(
       arr, point_is_singularity, segment_is_convex, segment_is_cut, upper_casing_edges,
-      lower_casing_edges, segment_orientation);
+      lower_casing_edges, segment_orientation, is_back_facing);
   std::cout << "checked validity" << std::endl;
 
   if (is_debug) {
@@ -530,7 +531,7 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
 
     std::filesystem::create_directories("./.tmp_debug");
 
-    auto svg = planar_map_to_svg(arr, qi, segment_is_convex,
+    auto svg = planar_map_to_svg(arr, qi, segment_is_convex, segment_is_cut,
                                  point_is_singularity, qi_mismatch_positions);
     std::ofstream svg_file(svg_path);
     svg_file << svg;

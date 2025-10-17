@@ -21,7 +21,7 @@ bool operator()(const QueueEntry& a, const QueueEntry& b) const noexcept {
 }
 };
 
-using SegmentQueue = std::priority_queue<QueueEntry, std::vector<QueueEntry>, CompareByQi>;
+using SegmentQueue = std::queue<QueueEntry>;
 
 void assign_silhouette_qi(
     Arrangement_with_history_2 &arr,
@@ -228,28 +228,28 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_crossing(
     int lower_qi = -1;
 
     if (is_cut.at(upper_1_new) && is_cut.at(upper_2_new)) {
-      // if the upper is a cut, nothing changes on all the points
-      lower_qi = qi.at(lower_visible);
+      // if the upper is a cut, nothing changes on all the lower points
+      if (qi.at(lower_visible) != -1) {
+        lower_qi = qi.at(lower_visible);
+      } else if (qi.at(lower_occluded) != -1) {
+        lower_qi = qi.at(lower_occluded);
+      }
 
       if (lower_qi != -1) {
         returning_qi.push_back({lower_visible, lower_qi});
         returning_qi.push_back({lower_occluded, lower_qi});
       }
-    } else if (is_cut.at(lower_1_new) && is_cut.at(lower_2_new)) {
-      // if the lower is a cut, only the cut gets smaller on the left side of the upper
-      lower_qi = qi.at(lower_visible);
-
-      if (lower_qi != -1) {
-        returning_qi.push_back({lower_visible, lower_qi});
-        returning_qi.push_back({lower_occluded, lower_qi + 1});
-      }
     } else {
-      lower_qi = qi.at(lower_visible);
-
-      if (lower_qi != -1 && lower_qi >= upper_qi) {
+      // otherwise, adopt the usual rules
+      if (qi.at(lower_visible) != -1) {
+        lower_qi = qi.at(lower_visible);
         returning_qi.push_back({lower_visible, lower_qi});
         returning_qi.push_back({lower_occluded, lower_qi + 1});
-      } 
+      } else if (qi.at(lower_occluded) != -1) {
+        lower_qi = qi.at(lower_occluded);
+        returning_qi.push_back({lower_visible, lower_qi - 1});
+        returning_qi.push_back({lower_occluded, lower_qi});
+      }
     }
 
     return {true, returning_qi};
@@ -260,37 +260,42 @@ is_threeway(const Arrangement_with_history_2 &arr,
             const std::map<Segment_2, int, Segment2Comparator> &qi,
             const std::map<Segment_2, bool, Segment2Comparator> &is_cut,
             Vertex_const_iterator &vertex) {
-  // a threeway has one cut and two non-cut edges
-  std::vector<Segment_2> cut_segments;
-  std::vector<Segment_2> non_cut_segments;
-  for (auto it = vertex->incident_halfedges(); it != vertex->incident_halfedges(); it++) {
-    if (is_cut.at(it->curve())) {
-      cut_segments.push_back(it->curve());
-    } else {
-      non_cut_segments.push_back(it->curve());
-    }
+  if (vertex->degree() != 3) {
+    return {false, {}};
   }
   
-  if (cut_segments.size() != 1 || non_cut_segments.size() != 2) {
+  // a threeway has one cut and two non-cut edges
+  int cut_count = 0, non_cut_count = 0;
+  std::vector<Segment_2> all_segments;
+  auto it = vertex->incident_halfedges();
+  do {
+    if (is_cut.at(it->curve())) {
+      cut_count++;
+    } else {
+      non_cut_count++;
+    }
+    all_segments.push_back(it->curve());
+    ++it;
+  } while (it != vertex->incident_halfedges());
+
+  if (cut_count != 1 && cut_count != 3) {
     return {false, {}};
   }
 
   // on a threeway, the qi must be assigned as q, q, q
+  std::vector<std::pair<Segment_2, int>> returning_qi;
   int qi_value = -1;
-  if (qi.at(cut_segments[0]) != -1) {
-    qi_value = qi.at(cut_segments[0]);
-  } else if (qi.at(non_cut_segments[0]) != -1) {
-    qi_value = qi.at(non_cut_segments[0]);
-  } else if (qi.at(non_cut_segments[1]) != -1) {
-    qi_value = qi.at(non_cut_segments[1]);
+  for (auto segment : all_segments) {
+    if (qi.at(segment) != -1) {
+      qi_value = qi.at(segment);
+      break;
+    }
   }
 
-  std::vector<std::pair<Segment_2, int>> returning_qi;
-
   if (qi_value != -1) {
-    returning_qi.push_back({cut_segments[0], qi_value});
-    returning_qi.push_back({non_cut_segments[0], qi_value});
-    returning_qi.push_back({non_cut_segments[1], qi_value});
+    returning_qi.push_back({all_segments[0], qi_value});
+    returning_qi.push_back({all_segments[1], qi_value});
+    returning_qi.push_back({all_segments[2], qi_value});
   }
 
   return {true, returning_qi};
@@ -303,6 +308,7 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_singularity(
     const std::map<Point_2, bool> &point_is_singularity,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
     const std::map<Segment_2, int, Segment2Comparator> &qi,
+    const bool is_back_facing,
     Vertex_const_iterator &vertex
 ) {
     std::vector<std::pair<Segment_2, int>> returning_qi;
@@ -336,6 +342,12 @@ std::tuple<bool, std::vector<std::pair<Segment_2, int>>> is_singularity(
         ++it;
     } while (it != vertex->incident_halfedges());
 
+    // on a back facing patch, the visible side is concave and the occluded side is convex
+    if (is_back_facing) {
+      std::swap(visible, occluded);
+      // std::cout << "  visible: " << visible << ", occluded: " << occluded << std::endl;
+    }
+
     if (qi.at(visible) != -1) {
         returning_qi.push_back({visible, qi.at(visible)});
         returning_qi.push_back({occluded, qi.at(visible) + 1});
@@ -365,6 +377,7 @@ void propagate_qi(
     const std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
     const std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
     const std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+    const bool is_back_facing,
     std::map<Segment_2, int, Segment2Comparator> &qi
 ) {
     // the queue of segments to be propagated
@@ -397,7 +410,7 @@ void propagate_qi(
             }
         }
 
-        auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, vertex);
+        auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, is_back_facing, vertex);
 
         if (singularity_found) {
             for (auto [segment, qi_value] : qi_singularity) {
@@ -408,10 +421,10 @@ void propagate_qi(
 
         }
     }
-    
+
     while (!q.empty()) {
-        Segment_2 current_segment = q.top().segment;
-        int current_qi = q.top().qi;
+        Segment_2 current_segment = q.front().segment;
+        int current_qi = q.front().qi;
         q.pop();
 
         if (qi.at(current_segment) != -1) {
@@ -490,7 +503,7 @@ void propagate_qi(
                     }
                 }
 
-                auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, vertex);
+                auto [singularity_found, qi_singularity] = is_singularity(arr, point_is_singularity, segment_is_convex, qi, is_back_facing, vertex);
         
                 if (singularity_found) {
                     for (auto [segment, qi_value] : qi_singularity) {
@@ -518,7 +531,8 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
     std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
     // given a "new" segment, does segment.source() -> segment.target() matches the canonical orientation?
-    std::map<Segment_2, int, Segment2Comparator> &segment_orientation
+    std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+    bool is_back_facing
 ) {
     // store the propagated qi
     // this is based on the "new" segments on the planar map
@@ -534,12 +548,12 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
     // 1. propagate the qi from the silhouette
     assign_silhouette_qi(arr, qi);
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
-                 upper_casing_edges, lower_casing_edges, segment_orientation, qi);
+                 upper_casing_edges, lower_casing_edges, segment_orientation, is_back_facing, qi);
 
     // 2. propagate the qi from the edges where the winding number on the right side face is the lowest
     assign_lowest_wn_qi(arr, wn, segment_orientation, qi);
     propagate_qi(arr, point_is_singularity, segment_is_convex, segment_is_cut,
-                 upper_casing_edges, lower_casing_edges, segment_orientation, qi);
+                 upper_casing_edges, lower_casing_edges, segment_orientation, is_back_facing, qi);
 
     // finally, check the validity for each vertex / singularity
     std::map<Segment_2, bool, Segment2Comparator> is_segment_invalid;

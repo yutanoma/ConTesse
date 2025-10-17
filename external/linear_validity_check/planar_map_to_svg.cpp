@@ -1,10 +1,8 @@
 #include "planar_map_to_svg.h"
 #include "planar_map.h"
-#include "validity_check.h"
 
 #include <sstream>
 #include <iomanip>
-#include <unordered_set>
 #include <limits>
 #include <cmath>
 #include <algorithm>
@@ -46,27 +44,11 @@ struct SvgTransform {
     int width = 800, height = 600;
     double margin = 10.0;
     double scale = 1.0;
-
-    std::pair<double,double> map_xy(const Point_2 &p) const {
-        double x = CGAL::to_double(p.x());
-        double y = CGAL::to_double(p.y());
-        double sx = (xmax > xmin) ? (width - 2.0*margin) / (xmax - xmin) : 1.0;
-        double sy = (ymax > ymin) ? (height - 2.0*margin) / (ymax - ymin) : 1.0;
-        double s = std::min(sx, sy);
-        double xpad = (width - 2.0*margin - s * (xmax - xmin)) * 0.5;
-        double ypad = (height - 2.0*margin - s * (ymax - ymin)) * 0.5;
-        double X = margin + xpad + (x - xmin) * s;
-        double Y = margin + ypad + (ymax - y) * s; // flip y
-        return {X, Y};
-    }
 };
 
 static SvgTransform compute_transform(
     const Arrangement_with_history_2 &arr,
-    const std::vector<Point_2> &invalid_points,
-    int width = 800,
-    int height = 600,
-    double margin = 10.0
+    const std::vector<Point_2> &invalid_points
 ) {
     double xmin = std::numeric_limits<double>::infinity();
     double ymin = std::numeric_limits<double>::infinity();
@@ -88,15 +70,21 @@ static SvgTransform compute_transform(
     for (const auto &p : invalid_points) update_bbox(p);
 
     if (!std::isfinite(xmin)) {
-        xmin = ymin = 0.0;
-        xmax = ymax = 1.0;
+        xmin = ymin = 0;
+        xmax = ymax = 800;
     }
     if (std::abs(xmax - xmin) < 1e-12) { xmax = xmin + 1.0; }
     if (std::abs(ymax - ymin) < 1e-12) { ymax = ymin + 1.0; }
 
     SvgTransform T;
-    T.xmin = xmin; T.xmax = xmax; T.ymin = ymin; T.ymax = ymax;
-    T.width = width; T.height = height; T.margin = margin;
+    T.xmin = xmin;
+    T.xmax = xmax;
+    T.ymin = ymin;
+    T.ymax = ymax;
+
+    T.width = xmax;
+    T.height = ymax;
+
     return T;
 }
 
@@ -115,19 +103,21 @@ struct Chain {
     std::vector<Point_2> pts;
     int qi;
     bool convex;
+    bool all_cut;
 };
 
 std::vector<Chain> get_chains(
     const Arrangement_with_history_2 &arr,
     const std::map<Segment_2, int, Segment2Comparator> &qi,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
+    const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
     const std::map<Point_2, bool> &point_is_singularity
 ) {
     std::vector<Chain> chains;
     std::map<Segment_2, int, Segment2Comparator> chain_id;
 
     for (auto hei = arr.halfedges_begin(); hei != arr.halfedges_end(); ++hei) {
-      auto segment = hei->curve();
+        auto segment = hei->curve();
 
         if (chain_id.find(segment) != chain_id.end()) {
             continue;
@@ -136,6 +126,11 @@ std::vector<Chain> get_chains(
         Chain chain;
         chain.qi = qi.at(segment);
         chain.convex = segment_is_convex.at(segment);
+        {
+            auto it_cut_init = segment_is_cut.find(segment);
+            bool is_cut_init = (it_cut_init != segment_is_cut.end()) ? it_cut_init->second : false;
+            chain.all_cut = is_cut_init; // chain class is defined by first segment's cut state
+        }
 
         // traverse the chain
         std::queue<Arrangement_with_history_2::Halfedge_const_handle> queue;
@@ -172,7 +167,14 @@ std::vector<Chain> get_chains(
 
                 auto it = v->incident_halfedges();
                 do {
-                    queue.push(it);
+                    // Only expand along segments that match the chain's cut classification
+                    if (chain_id.find(it->curve()) == chain_id.end()) {
+                        auto it_cut_n = segment_is_cut.find(it->curve());
+                        bool is_cut_n = (it_cut_n != segment_is_cut.end()) ? it_cut_n->second : false;
+                        if (is_cut_n == chain.all_cut) {
+                            queue.push(it);
+                        }
+                    }
                     ++it;
                 } while (it != v->incident_halfedges());
             }
@@ -180,30 +182,32 @@ std::vector<Chain> get_chains(
 
         // std::cout << "Pts in chain: " << pts_in_chain.size() << std::endl;
 
+        // std::cout << "default point: " << Point_2() << std::endl;
+
         Point_2 start_pt;
+        bool found_start_pt = false;
         for (const auto &p : pts_in_chain) {
             if (pts_to_segments[p].size() == 1) {
                 start_pt = p;
+                found_start_pt = true;
                 break;
             }
         }
-        // std::cout << "Start point 1: " << start_pt << std::endl;
 
-        if (start_pt == Point_2()) {
+        if (!found_start_pt) {
             // if no start point is found, then any point is okay for start_pt
             // but we need to find one that actually has segments
             for (const auto &p : pts_in_chain) {
                 if (pts_to_segments[p].size() > 0) {
                     start_pt = p;
+                    found_start_pt = true;
                     break;
                 }
             }
         }
 
-        // std::cout << "Start point 2: " << start_pt << std::endl;
-
         // Check if we found a valid start point with segments
-        if (start_pt == Point_2() || pts_to_segments[start_pt].empty()) {
+        if (!found_start_pt || pts_to_segments[start_pt].empty()) {
             std::cout << "Warning: No valid start point found for chain, skipping..." << std::endl;
             continue;
         }
@@ -252,12 +256,13 @@ std::string planar_map_to_svg(
     const Arrangement_with_history_2 &arr,
     const std::map<Segment_2, int, Segment2Comparator> &qi,
     const std::map<Segment_2, bool, Segment2Comparator> &segment_is_convex,
+    const std::map<Segment_2, bool, Segment2Comparator> &segment_is_cut,
     const std::map<Point_2, bool> &point_is_singularity,
     const std::vector<Point_2> &invalid_points
 ) {
-    SvgTransform T = compute_transform(arr, invalid_points, 800, 600, 10.0);
+    SvgTransform T = compute_transform(arr, invalid_points);
 
-    auto chains = get_chains(arr, qi, segment_is_convex, point_is_singularity);
+    auto chains = get_chains(arr, qi, segment_is_convex, segment_is_cut, point_is_singularity);
 
     std::ostringstream ss;
     ss << "<svg xmlns=\"http://www.w3.org/2000/svg\""
@@ -273,8 +278,8 @@ std::string planar_map_to_svg(
         std::string color = color_for_qi(ch.qi);
         ss << "    <path d=\"";
         for (size_t i = 0; i < ch.pts.size(); ++i) {
-            auto xy = T.map_xy(ch.pts[i]);
-            double x = xy.first, y = xy.second;
+            double x = CGAL::to_double(ch.pts[i].x());
+            double y = CGAL::to_double(ch.pts[i].y());
             if (i == 0) {
                 ss << "M " << x << " " << y << " ";
             } else {
@@ -284,7 +289,9 @@ std::string planar_map_to_svg(
         ss << "\" fill=\"none\""
            << " stroke=\"" << color << "\""
            << " stroke-width=\"" << 1.0 << "\"";
-        if (!ch.convex) {
+        if (ch.all_cut) {
+            ss << " stroke-dasharray=\"4 6\" stroke-linecap=\"round\"";
+        } else if (!ch.convex) {
             ss << " stroke-dasharray=\"1 2\" stroke-linecap=\"round\"";
         }
         ss << "/>\n";
@@ -295,8 +302,8 @@ std::string planar_map_to_svg(
     for (auto vit = arr.vertices_begin(); vit != arr.vertices_end(); ++vit) {
         auto pit = point_is_singularity.find(vit->point());
         if (pit != point_is_singularity.end() && pit->second) {
-            auto xy = T.map_xy(vit->point());
-            double x = xy.first, y = xy.second;
+            double x = CGAL::to_double(vit->point().x());
+            double y = CGAL::to_double(vit->point().y());
             ss << "    <circle cx=\"" << x << "\" cy=\"" << y << "\" r=\"1\" fill=\"black\" stroke=\"none\"/>\n";
         }
     }
@@ -304,8 +311,8 @@ std::string planar_map_to_svg(
 
     ss << "  <g id=\"invalid_points\">\n";
     for (const auto &p : invalid_points) {
-        auto xy = T.map_xy(p);
-        double x = xy.first, y = xy.second;
+        double x = CGAL::to_double(p.x());
+        double y = CGAL::to_double(p.y());
         ss << "    <circle cx=\"" << x << "\" cy=\"" << y << "\" r=\"1.5\" fill=\"none\" stroke=\"red\"/>\n";
     }
     ss << "  </g>\n";

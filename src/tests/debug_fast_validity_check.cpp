@@ -147,6 +147,7 @@ int main(int argc, char* argv[]) {
         auto vertex_is_cusp = readVectorFromFile<Eigen::VectorXi>(debug_dir + "/vertex_is_cusp.txt");
         auto vertex_is_singularity = readVectorFromFile<Eigen::VectorXi>(debug_dir + "/vertex_is_singularity.txt");
         auto camera_pos = readVectorFromFile<Eigen::Vector3d>(debug_dir + "/camera_pos.txt");
+        auto is_back_facing = readVectorFromFile<Eigen::VectorXi>(debug_dir + "/is_back_facing.txt");
         
         std::cout << "Successfully loaded all input data:" << std::endl;
         std::cout << "  vertices_3d: " << vertices_3d.rows() << "x" << vertices_3d.cols() << std::endl;
@@ -157,13 +158,14 @@ int main(int argc, char* argv[]) {
         std::cout << "  vertex_is_cusp: " << vertex_is_cusp.size() << std::endl;
         std::cout << "  vertex_is_singularity: " << vertex_is_singularity.size() << std::endl;
         std::cout << "  camera_pos: " << camera_pos.transpose() << std::endl;
+        std::cout << "  is_back_facing: " << is_back_facing(0) << std::endl;
         
         std::cout << "\nCalling fast_validity_check..." << std::endl;
         
         // Call the fast_validity_check function
         auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
             vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
-            vertex_is_cusp, vertex_is_singularity, camera_pos, true);
+            vertex_is_cusp, vertex_is_singularity, camera_pos, is_back_facing(0), true);
 
         std::cout << "fast_validity_check completed!" << std::endl;
         std::cout << "Result: " << (is_wso_succeeded ? "SUCCESS" : "FAILED")

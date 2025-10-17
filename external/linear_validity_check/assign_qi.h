@@ -21,6 +21,7 @@ std::tuple<bool, std::map<Segment_2, int, Segment2Comparator>, std::vector<Point
   std::map<Point_2, std::vector<Segment_2>> &upper_casing_edges,
   std::map<Point_2, std::vector<Segment_2>> &lower_casing_edges,
   // given a "new" segment, does segment.source() -> segment.target() matches the canonical orientation?
-  std::map<Segment_2, int, Segment2Comparator> &segment_orientation
+  std::map<Segment_2, int, Segment2Comparator> &segment_orientation,
+  bool is_back_facing
 );
 } // namespace utils

@@ -133,11 +133,7 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
     }
 
     // if this is a back facing patch, reverse the signs of the edges
-    if (facing == FacingType::BACK) {
-      for (size_t i = 0; i < edges.size(); i++) {
-        edge_signs[i] = -edge_signs[i];
-      }
-    }
+    bool is_back_facing = facing == FacingType::BACK;
 
     Matrix3Xf _vertices_3d(3, vertices.size());
     for (size_t i = 0; i < vertices.size(); i++) {
@@ -236,13 +232,17 @@ void linear_wso_check(Mesh &mesh, Camera const &camera,
     camera_pos_file << camera_pos.transpose() << std::endl;
     camera_pos_file.close();
     
+    std::ofstream is_back_facing_file(debug_dir + "/is_back_facing.txt", std::ios::out | std::ios::trunc);
+    is_back_facing_file << is_back_facing << std::endl;
+    is_back_facing_file.close();
+    
     logger().info("Debug inputs exported to {} directory", debug_dir);
 
     logger().info("fast_validity_check start");
 
     // auto [is_wso_succeeded, V_out, F_out, V_JI] = utils::fast_validity_check(
     //     vertices_3d, vertices_2d, edges_connectivity, edges_sign, edges_is_cut,
-    //     vertex_is_cusp, vertex_is_singularity, camera_pos);
+    //     vertex_is_cusp, vertex_is_singularity, camera_pos, is_back_facing);
 
     // std::vector<size_t> vid_original(V_JI.size());
     // for (int i = 0; i < V_JI.size(); i++) {

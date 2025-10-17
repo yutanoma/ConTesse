@@ -11,5 +11,6 @@ fast_validity_check(const Eigen::MatrixXd &V_3d, const Eigen::MatrixXd &V_2d,
                     const Eigen::VectorXi &V_is_cusp,
                     const Eigen::VectorXi &V_is_singularity,
                     const Eigen::Vector3d &camera_pos,
+                    bool is_back_facing,
                     bool is_debug = false);
 } // namespace utils
